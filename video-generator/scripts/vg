@@ -1,0 +1,201 @@
+#!/usr/bin/env python3
+"""
+vg - Video Generator CLI
+
+Single entry point for all video generation operations.
+Designed for AI agent orchestration with structured JSON output.
+"""
+
+import argparse
+import sys
+import threading
+import time
+import os
+from pathlib import Path
+
+# Setup Python path for all modules
+SCRIPT_DIR = Path(__file__).parent.resolve()
+sys.path.insert(0, str(SCRIPT_DIR))
+
+# Load .env file if it exists
+def load_env_file():
+    """Load environment variables from .env file
+    
+    Messages go to stderr so stdout stays clean for JSON output.
+    """
+    env_paths = [
+        SCRIPT_DIR.parent.parent / ".env",  # video-generator/.env
+        SCRIPT_DIR.parent.parent.parent / ".env"  # project/.env
+    ]
+
+    for env_path in env_paths:
+        if env_path.exists():
+            print(f"📄 Loading environment from {env_path}", file=sys.stderr)
+            with open(env_path, 'r') as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith('#') and '=' in line:
+                        key, value = line.split('=', 1)
+                        key = key.strip()
+                        value = value.strip().strip('"').strip("'")
+                        os.environ[key] = value
+                        print(f"  ✓ Set {key}", file=sys.stderr)
+            break
+
+load_env_file()
+
+# Import command handlers
+from vg_commands import record, audio, edit, compose, talking_head, quality, utils, request, narration, captions
+
+def main():
+    parser = argparse.ArgumentParser(
+        prog='vg',
+        description='Video Generator - AI-orchestrated video creation'
+    )
+    parser.add_argument('--json', action='store_true', help='Output as JSON (default)')
+    parser.add_argument('--progress', action='store_true', help='Show progress for long operations')
+
+    subparsers = parser.add_subparsers(dest='command', required=True)
+
+    # Register all command groups
+    record.register(subparsers)
+    audio.register(subparsers)
+    edit.register(subparsers)
+    compose.register(subparsers)
+    talking_head.register(subparsers)
+    quality.register(subparsers)
+    captions.register(subparsers)
+    utils.register(subparsers)
+    request.register(subparsers)
+    narration.register(subparsers)
+
+    args = parser.parse_args()
+
+    # Execute with progress reporting if requested
+    if args.progress and hasattr(args, 'func'):
+        result = execute_with_progress(args)
+    else:
+        try:
+            result = args.func(args)
+        except Exception as e:
+            result = {
+                "success": False,
+                "error": str(e),
+                "code": "UNEXPECTED_ERROR"
+            }
+
+    output_text(result)
+    sys.exit(0 if result.get("success") else 1)
+
+def execute_with_progress(args):
+    """Execute command with progress reporting."""
+    progress_data = {"current": 0, "message": "Starting..."}
+
+    def progress_callback(message: str, percent: int):
+        progress_data["message"] = message
+        progress_data["current"] = percent
+        # Output progress to stderr so stdout remains clean for result
+        print(f"[{percent}%] {message}", file=sys.stderr)
+
+    # Start a simple progress monitor
+    def progress_monitor():
+        while progress_data["current"] < 100:
+            time.sleep(1)
+            # Could add more sophisticated progress monitoring here
+        progress_callback("Complete", 100)
+
+    # Start progress monitor in background
+    monitor_thread = threading.Thread(target=progress_monitor, daemon=True)
+    monitor_thread.start()
+
+    try:
+        # Execute the actual command
+        result = args.func(args)
+        progress_callback("Complete", 100)
+        return result
+    except Exception as e:
+        progress_callback(f"Error: {str(e)}", 0)
+        return {
+            "success": False,
+            "error": str(e),
+            "code": "UNEXPECTED_ERROR"
+        }
+
+def output_text(data: dict):
+    """Output result as plain text - AI-friendly format."""
+    if not isinstance(data, dict):
+        print(str(data))
+        return
+    
+    # Status line
+    if data.get("success") == False:
+        print(f"ERROR: {data.get('error', 'Unknown error')}")
+        if data.get("code"):
+            print(f"code: {data['code']}")
+        if data.get("suggestion"):
+            print(f"suggestion: {data['suggestion']}")
+        return
+    
+    print("OK")
+    
+    # Output each field in readable format
+    for key, value in data.items():
+        if key in ("success",):  # Skip, already shown via OK/ERROR
+            continue
+        
+        if value is None:
+            continue
+        
+        # Handle special cases
+        if key == "time_map" and isinstance(value, list):
+            print("time_map:")
+            for pair in value:
+                if len(pair) >= 2:
+                    print(f"  {pair[0]:.2f}s → {pair[1]:.2f}s")
+        elif key == "adjustment" and isinstance(value, dict):
+            secs = value.get("seconds", 0)
+            print(f"adjustment: {secs:+.1f}s")
+        elif key == "markers" and isinstance(value, dict):
+            print("markers:")
+            for name, t in sorted(value.items(), key=lambda x: x[1] if isinstance(x[1], (int, float)) else 0):
+                print(f"  {name}: {t:.2f}s" if isinstance(t, (int, float)) else f"  {name}: {t}")
+        elif key == "interactive_elements" and isinstance(value, list):
+            print("elements:")
+            for el in value[:15]:  # Limit to 15
+                if isinstance(el, dict):
+                    etype = el.get("type", "?")
+                    text = el.get("text", "")[:40]
+                    selector = el.get("selector", "")
+                    print(f"  {etype}: {text}")
+                    if selector:
+                        print(f"    selector: {selector}")
+        elif key == "snapshot" and isinstance(value, dict):
+            print(f"url: {value.get('url', '')}")
+            print(f"title: {value.get('title', '')}")
+            if value.get("text_sample"):
+                print(f"text: {value['text_sample'][:500]}")
+            if value.get("interactive_elements"):
+                print("elements:")
+                for el in value["interactive_elements"][:15]:
+                    etype = el.get("type", "?")
+                    text = el.get("text", "")[:40]
+                    print(f"  {etype}: {text}")
+        elif isinstance(value, dict):
+            print(f"{key}:")
+            for k, v in value.items():
+                print(f"  {k}: {v}")
+        elif isinstance(value, list) and len(value) > 0:
+            print(f"{key}:")
+            for item in value[:20]:  # Limit list items
+                print(f"  - {item}")
+        else:
+            # Simple value - format nicely
+            if key.endswith("_s") or key == "duration":
+                print(f"{key.replace('_s', '')}: {value}s")
+            elif key.endswith("_path") or key in ("path", "video", "audio", "timeline", "output"):
+                print(f"{key}: {value}")
+            else:
+                print(f"{key}: {value}")
+
+if __name__ == "__main__":
+    main()

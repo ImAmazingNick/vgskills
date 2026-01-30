@@ -1,0 +1,14 @@
+# Video Generator - Python Dependencies
+# Install with: pip install -r requirements.txt
+
+# Browser automation
+playwright>=1.40.0
+
+# HTTP requests
+requests>=2.31.0
+
+# FFmpeg Python binding (fallback)
+imageio-ffmpeg>=0.4.9
+
+# Environment variable handling
+python-dotenv>=1.0.0
