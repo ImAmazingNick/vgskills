@@ -1,6 +1,6 @@
 # Video Generator - Complete Capabilities Reference
 
-> **Version**: 1.0  
+> **Version**: 1.1  
 > **Last Updated**: January 2026  
 > **Entry Point**: `scripts/vg` (CLI)
 
@@ -112,12 +112,13 @@
 
 | Command Group | Description | Subcommands |
 |---------------|-------------|-------------|
-| `record` | Browser recording | `screenshot`, `session start/do/stop/status` |
+| `record` | Browser recording | `screenshot`, `session start/do/stop/status`, `session agent-start/do/stop/status` |
 | `audio` | Audio operations | `tts`, `batch`, `mix` |
 | `edit` | Video editing | `trim`, `cut`, `speed`, `speed-silence`, `speed-gaps`, `concat` |
 | `compose` | Video composition | `sync`, `distribute`, `overlay`, **`place`** (agentic) |
 | `talking-head` | Talking head ops | `generate`, `composite`, **`overlay`** (agentic) |
 | `quality` | Quality operations | `validate`, `analyze`, `optimize` |
+| `captions` | Caption generation | `generate`, `burn`, `preview`, **`streaming`** (word-by-word) |
 | `request` | Request file ops | `parse`, `generate` |
 | `narration` | Narration templates | `template list/render/save`, `batch` |
 | `validate` | Validation ops | `timeline`, `request` |
@@ -171,11 +172,11 @@ vg record --url "https://app.example.com" --scenario ai-agent --request demo.md
 #### Live Recording Sessions
 | Type | CLI Command | Files | Description |
 |------|-------------|-------|-------------|
-| **Action** | `vg record session start` | `vg_commands/record.py`, `vg_record_session.py` | Start live session |
+| **Action** | `vg record session start` | `vg_commands/record.py`, `vg_session_simple.py` | Start live session |
 | **Action** | `vg record session do` | `vg_commands/record.py` | Send action to session |
 | **Action** | `vg record session stop` | `vg_commands/record.py` | Stop and save session |
-| **Function** | `run_session_loop()` | `vg_record_session.py` | Session control loop |
-| **Config** | `SessionConfig` | `vg_record_session.py` | Session configuration |
+| **Function** | `run_session()` | `vg_session_simple.py` | Session control loop |
+| **Config** | `SessionConfig` | `vg_session_simple.py` | Session configuration |
 
 **Capabilities:**
 - ✅ Start/stop live sessions
@@ -190,6 +191,34 @@ vg record session start --url "https://app.example.com" --run-id my_session
 vg record session do --run-id my_session --action click --selector "#button"
 vg record session stop --run-id my_session
 ```
+
+#### agent-browser Recording Sessions (Recommended for New Platforms)
+| Type | CLI Command | Files | Description |
+|------|-------------|-------|-------------|
+| **Action** | `vg record session agent-start` | `vg_commands/record.py`, `vg_agent_browser.py` | Start agent-browser session |
+| **Action** | `vg record session agent-do` | `vg_commands/record.py` | Send action to session |
+| **Action** | `vg record session agent-stop` | `vg_commands/record.py` | Stop and save session |
+| **Function** | `AgentBrowserSession` | `vg_agent_browser.py` | Session manager class |
+
+**Capabilities:**
+- ✅ Ref-based element selection (`@e1`, `@e5`) instead of CSS selectors
+- ✅ More stable when UIs change (refs from accessibility tree)
+- ✅ Snapshot returns element refs for AI decision-making
+- ✅ Actions: `snapshot`, `click`, `fill`, `type`, `press`, `wait`, `scroll`, `marker`, `screenshot`
+- ✅ Compatible with existing pipeline (same .webm + timeline.md output)
+- ✅ Auto-detection of system Chrome
+
+**Example:**
+```bash
+vg record session agent-start --run-id demo --url "https://app.example.com" --cookie "s=abc" --cookie-domain ".example.com"
+vg record session agent-do --run-id demo --action snapshot -i    # Get refs
+vg record session agent-do --run-id demo --action click --ref "@e5"
+vg record session agent-do --run-id demo --action type --ref "@e12" --value "Create dashboard"
+vg record session agent-do --run-id demo --action marker --value "t_submitted"
+vg record session agent-stop --run-id demo
+```
+
+**vs CSS Selectors:** Uses `agent-start/do/stop` + refs (`@e5`) instead of `start/do/stop` + CSS selectors. Recommended for new platforms where selectors may change.
 
 #### Screenshot Capture
 | Type | CLI Command | Files | Description |
@@ -709,12 +738,12 @@ vg validate timeline --timeline timeline.json --required-markers t_page_loaded t
 ### 10. Caption Generation & Subtitles
 
 #### Caption Generation
-|| Type | CLI Command | Files | Description |
-||------|-------------|-------|-------------|
-|| **Action** | `vg captions generate` | `vg_commands/captions.py`, `vg_captions.py` | Generate SRT/VTT from request + timeline |
-|| **Function** | `calculate_caption_times()` | `vg_captions.py` | Calculate caption timing from segments |
-|| **Function** | `generate_srt_file()` | `vg_captions.py` | Generate SRT subtitle file |
-|| **Function** | `generate_vtt_file()` | `vg_captions.py` | Generate WebVTT subtitle file |
+| Type | CLI Command | Files | Description |
+|------|-------------|-------|-------------|
+| **Action** | `vg captions generate` | `vg_commands/captions.py`, `vg_captions.py` | Generate SRT/VTT from request + timeline |
+| **Function** | `calculate_caption_times()` | `vg_captions.py` | Calculate caption timing from segments |
+| **Function** | `generate_srt_file()` | `vg_captions.py` | Generate SRT subtitle file |
+| **Function** | `generate_vtt_file()` | `vg_captions.py` | Generate WebVTT subtitle file |
 
 **Capabilities**:
 - ✅ Generate captions from existing voiceover text (no transcription needed)
@@ -728,13 +757,35 @@ vg validate timeline --timeline timeline.json --required-markers t_page_loaded t
 vg captions generate --request demo.md --timeline timeline.md --audio-dir audio/ -o captions.srt
 ```
 
+#### Streaming Captions (Word-by-Word)
+| Type | CLI Command | Files | Description |
+|------|-------------|-------|-------------|
+| **Action** | `vg captions streaming` | `vg_commands/captions.py`, `vg_captions.py` | Word-by-word animated captions (TikTok/YouTube style) |
+| **Function** | `create_streaming_captions()` | `vg_captions.py` | Create word-level streaming captions |
+| **Function** | `calculate_word_timings()` | `vg_captions.py` | Calculate per-word timing |
+| **Function** | `generate_word_level_srt()` | `vg_captions.py` | Generate word-level SRT |
+
+**Capabilities**:
+- ✅ Word-by-word caption reveal (TikTok/YouTube style)
+- ✅ Configurable words per group (default: 3)
+- ✅ One-step video + captions output
+- ✅ Trim offset support for edited videos
+- ✅ Automatic timing from audio segments
+
+**Example**:
+```bash
+vg captions streaming --video final.mp4 --request demo.md --timeline timeline.md --audio-dir audio/ -o captioned.mp4
+vg captions streaming --video trimmed.mp4 --request demo.md --timeline timeline.md --audio-dir audio/ --trim-offset 8 -o captioned.mp4
+```
+
 #### Caption Burn-in
-|| Type | CLI Command | Files | Description |
-||------|-------------|-------|-------------|
-|| **Action** | `vg captions burn` | `vg_commands/captions.py`, `vg_captions.py` | Burn captions into video |
-|| **Function** | `burn_captions_into_video()` | `vg_captions.py` | FFmpeg subtitle overlay |
-|| **Function** | `parse_caption_style()` | `vg_captions.py` | Parse style from CAPTIONS.md |
-|| **Reference** | `CAPTIONS.md` | `.claude/skills/video-generator/docs/CAPTIONS.md` | Style presets and guide |
+| Type | CLI Command | Files | Description |
+|------|-------------|-------|-------------|
+| **Action** | `vg captions burn` | `vg_commands/captions.py`, `vg_captions.py` | Burn captions into video |
+| **Function** | `burn_captions_into_video()` | `vg_captions.py` | FFmpeg subtitle overlay |
+| **Function** | `burn_captions_with_animation()` | `vg_captions.py` | Animated caption burn-in |
+| **Function** | `parse_caption_style()` | `vg_captions.py` | Parse style from CAPTIONS.md |
+| **Reference** | `CAPTIONS.md` | `.claude/skills/video-generator/docs/CAPTIONS.md` | Style presets and guide |
 
 **Capabilities**:
 - ✅ Burn captions into video using FFmpeg
@@ -743,6 +794,7 @@ vg captions generate --request demo.md --timeline timeline.md --audio-dir audio/
 - ✅ MD-based style configuration (no JSON)
 - ✅ Inline style overrides in request files
 - ✅ ASS subtitle format for advanced styling
+- ✅ Fade animations (configurable duration)
 
 **Style Presets**:
 - `youtube` - Standard YouTube style (white text, black outline, bottom center)
@@ -753,13 +805,14 @@ vg captions generate --request demo.md --timeline timeline.md --audio-dir audio/
 **Example**:
 ```bash
 vg captions burn --video final.mp4 --captions captions.srt --style youtube -o captioned.mp4
+vg captions burn --video final.mp4 --captions captions.srt --style professional --no-animate -o captioned.mp4
 ```
 
 #### Caption Preview
-|| Type | CLI Command | Files | Description |
-||------|-------------|-------|-------------|
-|| **Action** | `vg captions preview` | `vg_commands/captions.py` | Preview caption timing |
-|| **Function** | `validate_caption_timing()` | `vg_captions.py` | Timing validation |
+| Type | CLI Command | Files | Description |
+|------|-------------|-------|-------------|
+| **Action** | `vg captions preview` | `vg_commands/captions.py` | Preview caption timing |
+| **Function** | `validate_caption_timing()` | `vg_captions.py` | Timing validation |
 
 **Capabilities**:
 - ✅ Preview caption text and timing
@@ -991,7 +1044,8 @@ virthrillove/                           # Workspace root
 │       │   └── md_parser.py            # Markdown parsing
 │       │
 │       ├── vg_recording.py             # Recording implementation
-│       ├── vg_record_session.py        # Live session handling
+│       ├── vg_session_simple.py        # Live session handling (CSS selectors)
+│       ├── vg_agent_browser.py         # agent-browser session (ref-based)
 │       ├── vg_smart_waiting.py         # Smart wait conditions
 │       ├── vg_tts.py                   # TTS implementation
 │       ├── elevenlabs_tts.py           # ElevenLabs API wrapper
@@ -1083,12 +1137,13 @@ virthrillove/                           # Workspace root
 
 | Metric | Count |
 |--------|-------|
-| **Total Python modules** | 36+ |
+| **Total Python modules** | 38+ |
 | **CLI command groups** | 16 |
 | **Core capabilities** | 18 categories |
-| **External integrations** | 4 (ElevenLabs, FAL.ai, Playwright, FFmpeg) |
-| **Supported file formats** | MP4, WebM, MP3, M4A, WAV, JSON, Markdown, SRT, VTT |
+| **External integrations** | 5 (ElevenLabs, FAL.ai, Playwright, FFmpeg, agent-browser) |
+| **Supported file formats** | MP4, WebM, MP3, M4A, WAV, JSON, Markdown, SRT, VTT, ASS |
 | **Cache types** | TTS (24h), Talking Heads (24h), Characters (persistent) |
+| **Browser drivers** | 2 (Playwright CSS selectors, agent-browser refs) |
 
 ---
 
