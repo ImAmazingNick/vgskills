@@ -1,6 +1,6 @@
 # Video Generator Architecture
 
-> **Version:** 2.0  
+> **Version:** 2.1  
 > **Last Updated:** January 2026  
 > **Purpose:** Complete architecture overview with workflows and data flows
 
@@ -432,6 +432,12 @@ Whether user provides a request file or asks conversationally, the flow is the s
 │  $ vg captions streaming --video final.mp4 --request demo.md \           │
 │      --timeline timeline.md --audio-dir audio/ -o captioned.mp4          │
 │                                                                          │
+│  Or standard SRT burn-in:                                                │
+│  $ vg captions generate --request demo.md --timeline timeline.md \       │
+│      --audio-dir audio/ -o captions.srt                                  │
+│  $ vg captions burn --video final.mp4 --captions captions.srt \          │
+│      --style youtube -o captioned.mp4                                    │
+│                                                                          │
 └──────────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
@@ -598,6 +604,7 @@ videos/runs/<run_id>/
 | **Automated Recording** | Action-table execution | `vg_recording.py` |
 | **Smart Waiting** | Detect AI completion | `vg_smart_waiting.py` |
 | **Timeline** | Marker management | `vg_core_utils/timeline.py` |
+| **Captions** | SRT generation, burn-in, streaming | `vg_captions.py` |
 
 ### Dual Browser Driver Architecture
 
