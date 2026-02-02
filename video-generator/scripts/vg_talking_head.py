@@ -11,6 +11,7 @@ import subprocess
 
 from generate_talking_head import (
     generate_character_image,
+    generate_studio_character_image,
     generate_talking_head_video,
     integrate_talking_head_into_video,
     get_ffmpeg_path
@@ -26,12 +27,20 @@ class TalkingHeadSegment:
     duration_s: float
     video_path: Optional[Path] = None
 
-def generate_character(output_path: Optional[str] = None, force: bool = False) -> dict:
+def generate_character(output_path: Optional[str] = None, force: bool = False, style: str = "portrait") -> dict:
     """
     Generate presenter character image.
+    
+    Args:
+        output_path: Optional path to copy the generated image
+        force: Force regeneration even if cached
+        style: "portrait" for square face (overlays) or "studio" for fullscreen YouTuber studio
+    
+    Returns:
+        Dict with success, image path, and metadata
     """
     try:
-        result_path = generate_character_image(force_regenerate=force)
+        result_path = generate_character_image(force_regenerate=force, style=style)
 
         if output_path:
             # Copy to specified location
@@ -44,6 +53,7 @@ def generate_character(output_path: Optional[str] = None, force: bool = False) -
         return {
             "success": True,
             "image": result_path,
+            "style": style,
             "cached": not force
         }
 

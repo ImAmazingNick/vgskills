@@ -650,7 +650,8 @@ The Video Generator supports two browser automation drivers for recording:
 | **Editing** | Trim, cut, speed, concat | `vg_edit.py` |
 | **Composition** | Audio placement, overlay | `vg_compose.py` |
 | **Captions** | SRT generation, burn-in | `vg_captions.py` |
-| **Talking Heads** | AI presenter generation (create, generate, overlay) | `vg_talking_head.py`, `vg_commands/talking_head.py` |
+| **Talking Heads** | AI presenter (create, generate, overlay) | `vg_talking_head.py`, `vg_commands/talking_head.py` |
+| **Title Cards** | AI-generated titles (Grok Imagine Video) | `vg_commands/talking_head.py` |
 
 ---
 
@@ -659,7 +660,7 @@ The Video Generator supports two browser automation drivers for recording:
 | Service | Environment Variable | Purpose |
 |---------|---------------------|---------|
 | ElevenLabs | `ELEVENLABS_API_KEY` | Text-to-speech |
-| FAL.ai | `FAL_API_KEY` | Talking head generation (optional) |
+| FAL.ai | `FAL_API_KEY` | Talking heads, title cards (Grok Imagine Video) |
 | Platform Auth | `DTS_SESSIONID` (example) | Browser authentication |
 
 ---
@@ -723,10 +724,11 @@ vg edit speed-gaps --video v.mp4 --factor 3 -o fast.mp4  # Returns time_map
 vg compose place --video fast.mp4 --audio intro.mp3:10.2 -o final.mp4
 ```
 
-### Talking Heads
+### Talking Heads & Title Cards
 ```bash
-vg talking-head create --text "Hi!" -o th.mp4        # TTS + generate, returns duration
-vg talking-head generate --audio a.mp3 -o th.mp4     # From existing audio
+vg talking-head create --text "Hi!" -o th.mp4        # Square TH for PiP overlay
+vg talking-head intro --text "Welcome!" -o intro.mp4 # Fullscreen YouTuber-style
+vg talking-head title --text "Part 2" -o title.mp4   # AI title card (Grok Imagine)
 vg talking-head overlay --video v.mp4 --overlay th.mp4:10.2 -o final.mp4
 ```
 

@@ -44,6 +44,17 @@ def get_video_duration(ffmpeg: str, video_path: str) -> float:
     raise RuntimeError(f"Could not determine duration of {video_path}")
 
 
+def has_audio_track(ffmpeg: str, video_path: str) -> bool:
+    """Check if video has an audio stream."""
+    result = subprocess.run(
+        [ffmpeg, "-i", video_path],
+        capture_output=True, text=True
+    )
+    # FFmpeg outputs stream info to stderr
+    stderr_lower = result.stderr.lower()
+    return "audio:" in stderr_lower or ("stream #" in stderr_lower and "audio" in stderr_lower)
+
+
 def timestamp_to_seconds(ts: str) -> float:
     """Convert timestamp (MM:SS or HH:MM:SS) to seconds."""
     parts = ts.split(":")
@@ -74,9 +85,11 @@ def extract_segment(
     
     IMPORTANT FIX: Use -to instead of -t to avoid timing issues with filters.
     Also use trim filter for precise cuts when speed is involved.
+    Handles videos without audio track gracefully.
     """
     
     duration = end_s - start_s
+    video_has_audio = has_audio_track(ffmpeg, input_path)
     
     if speed == 1.0:
         # Simple extraction without speed change - use -to for precise end time
@@ -86,11 +99,18 @@ def extract_segment(
             "-i", input_path,
             "-to", str(duration),  # -to is relative to -ss position
             "-c:v", "libx264", "-preset", "fast", "-crf", "18",
-            "-c:a", "aac", "-b:a", "192k",
+        ]
+        
+        if video_has_audio:
+            cmd.extend(["-c:a", "aac", "-b:a", "192k"])
+        else:
+            cmd.append("-an")  # No audio output
+        
+        cmd.extend([
             "-pix_fmt", "yuv420p",
             "-avoid_negative_ts", "make_zero",  # Prevent timestamp issues
             output_path
-        ]
+        ])
     else:
         # Speed change with audio pitch correction
         # Use trim filter for precise cutting, then apply speed
@@ -98,34 +118,49 @@ def extract_segment(
         
         video_filter = f"setpts=PTS/{speed}"
         
-        # Build atempo chain for speeds > 2.0 or < 0.5
-        atempo_filters = []
-        remaining_speed = speed
-        while remaining_speed > 2.0:
-            atempo_filters.append("atempo=2.0")
-            remaining_speed /= 2.0
-        while remaining_speed < 0.5:
-            atempo_filters.append("atempo=0.5")
-            remaining_speed /= 0.5
-        atempo_filters.append(f"atempo={remaining_speed}")
-        audio_filter = ",".join(atempo_filters)
-        
-        # Use trim filter for video and atrim for audio to get precise cuts
-        # Then apply speed changes, then reset timestamps
+        # Use trim filter for video to get precise cuts
         video_full_filter = f"trim=start={start_s}:end={end_s},setpts=PTS-STARTPTS,{video_filter},setpts=PTS-STARTPTS"
-        audio_full_filter = f"atrim=start={start_s}:end={end_s},asetpts=PTS-STARTPTS,{audio_filter},asetpts=PTS-STARTPTS"
         
-        cmd = [
-            ffmpeg, "-y",
-            "-i", input_path,  # No -ss here, use trim filter instead
-            "-filter_complex", f"[0:v]{video_full_filter}[v];[0:a]{audio_full_filter}[a]",
-            "-map", "[v]", "-map", "[a]",
-            "-c:v", "libx264", "-preset", "fast", "-crf", "18",
-            "-c:a", "aac", "-b:a", "192k",
-            "-pix_fmt", "yuv420p",
-            "-avoid_negative_ts", "make_zero",
-            output_path
-        ]
+        if video_has_audio:
+            # Build atempo chain for speeds > 2.0 or < 0.5
+            atempo_filters = []
+            remaining_speed = speed
+            while remaining_speed > 2.0:
+                atempo_filters.append("atempo=2.0")
+                remaining_speed /= 2.0
+            while remaining_speed < 0.5:
+                atempo_filters.append("atempo=0.5")
+                remaining_speed /= 0.5
+            atempo_filters.append(f"atempo={remaining_speed}")
+            audio_filter = ",".join(atempo_filters)
+            
+            # Use atrim for audio to get precise cuts, then apply speed
+            audio_full_filter = f"atrim=start={start_s}:end={end_s},asetpts=PTS-STARTPTS,{audio_filter},asetpts=PTS-STARTPTS"
+            
+            cmd = [
+                ffmpeg, "-y",
+                "-i", input_path,  # No -ss here, use trim filter instead
+                "-filter_complex", f"[0:v]{video_full_filter}[v];[0:a]{audio_full_filter}[a]",
+                "-map", "[v]", "-map", "[a]",
+                "-c:v", "libx264", "-preset", "fast", "-crf", "18",
+                "-c:a", "aac", "-b:a", "192k",
+                "-pix_fmt", "yuv420p",
+                "-avoid_negative_ts", "make_zero",
+                output_path
+            ]
+        else:
+            # No audio track - video only processing
+            cmd = [
+                ffmpeg, "-y",
+                "-i", input_path,
+                "-filter_complex", f"[0:v]{video_full_filter}[v]",
+                "-map", "[v]",
+                "-an",  # No audio output
+                "-c:v", "libx264", "-preset", "fast", "-crf", "18",
+                "-pix_fmt", "yuv420p",
+                "-avoid_negative_ts", "make_zero",
+                output_path
+            ]
     
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:

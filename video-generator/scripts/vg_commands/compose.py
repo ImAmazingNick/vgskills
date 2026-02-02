@@ -35,6 +35,8 @@ def register(subparsers):
     place_parser.add_argument('--output', '-o', required=True, help='Output video path')
     place_parser.add_argument('--no-fix-overlaps', action='store_true',
                               help='Disable automatic overlap fixing (default: fix overlaps with 300ms gaps)')
+    place_parser.add_argument('--strict', action='store_true',
+                              help='Strict mode: fail on overlaps instead of auto-fixing (recommended for agentic workflows)')
     place_parser.set_defaults(func=cmd_place)
 
     # vg compose distribute - LEGACY: uses marker matching (for backward compatibility)
@@ -124,6 +126,11 @@ def cmd_place(args) -> dict:
         video_path = Path(args.video)
         output_path = Path(args.output)
         fix_overlaps = not getattr(args, 'no_fix_overlaps', False)
+        strict_mode = getattr(args, 'strict', False)
+        
+        # Strict mode implies no auto-fix
+        if strict_mode:
+            fix_overlaps = False
         
         # Validate video exists
         if not video_path.exists():
@@ -182,16 +189,53 @@ def cmd_place(args) -> dict:
         # Sort by start time for overlap detection
         placements.sort(key=lambda p: p["start_s"])
         
-        # Detect and fix overlaps (cascading with 300ms gaps)
-        overlaps_fixed = []
-        if fix_overlaps and len(placements) > 1:
+        # Detect overlaps
+        overlaps_detected = []
+        if len(placements) > 1:
             for i in range(1, len(placements)):
                 prev = placements[i - 1]
                 curr = placements[i]
                 prev_end = prev["start_s"] + prev["duration_s"]
                 
                 if curr["start_s"] < prev_end:
-                    # Overlap detected - delay this segment
+                    overlaps_detected.append({
+                        "file": Path(curr["file"]).name,
+                        "prev_file": Path(prev["file"]).name,
+                        "overlap_s": prev_end - curr["start_s"],
+                        "curr_start_s": curr["start_s"],
+                        "prev_end_s": prev_end
+                    })
+        
+        # Handle overlaps based on mode
+        overlaps_fixed = []
+        if overlaps_detected and strict_mode:
+            # FAIL instead of auto-fix - AI should recalculate
+            print(f"\n" + "="*60)
+            print(f"❌ STRICT MODE: Overlapping segments detected!")
+            print(f"="*60)
+            for overlap in overlaps_detected:
+                print(f"   {overlap['prev_file']} ends at {overlap['prev_end_s']:.1f}s")
+                print(f"   {overlap['file']} starts at {overlap['curr_start_s']:.1f}s")
+                print(f"   Overlap: {overlap['overlap_s']:.1f}s")
+            print(f"\n   💡 AI should recalculate placement times")
+            print(f"="*60 + "\n")
+            
+            return {
+                "success": False,
+                "error": f"Overlapping segments detected. AI should recalculate times.",
+                "code": "OVERLAP_ERROR",
+                "overlaps": overlaps_detected,
+                "suggestion": "Recalculate placement times with proper gaps, or remove --strict flag"
+            }
+        
+        elif overlaps_detected and fix_overlaps:
+            # Auto-fix overlaps with cascading 300ms gaps
+            for i in range(1, len(placements)):
+                prev = placements[i - 1]
+                curr = placements[i]
+                prev_end = prev["start_s"] + prev["duration_s"]
+                
+                if curr["start_s"] < prev_end:
                     old_start = curr["start_s"]
                     new_start = prev_end + 0.3  # 300ms gap
                     curr["start_s"] = new_start
@@ -201,11 +245,19 @@ def cmd_place(args) -> dict:
                         "adjusted_start": new_start,
                         "delay_added": new_start - old_start
                     })
-        
-        if overlaps_fixed:
-            print(f"⚠️  Fixed {len(overlaps_fixed)} overlapping segment(s):")
+            
+            # VERY prominent warning for non-strict workflows
+            print(f"\n" + "="*60)
+            print(f"⚠️  OVERLAP AUTO-FIX: {len(overlaps_fixed)} segment(s) shifted!")
+            print(f"="*60)
             for fix in overlaps_fixed:
                 print(f"   {fix['file']}: {fix['original_start']:.1f}s → {fix['adjusted_start']:.1f}s (+{fix['delay_added']:.1f}s)")
+            print(f"\n   💡 Use --strict to fail on overlaps (recommended for agentic workflows)")
+            print(f"="*60 + "\n")
+        
+        elif overlaps_detected:
+            # No fix, no strict - just warn
+            print(f"⚠️  {len(overlaps_detected)} overlap(s) detected but not fixed (use --strict or remove --no-fix-overlaps)")
         
         # Ensure output directory exists
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -278,7 +330,13 @@ def cmd_place(args) -> dict:
             "video": str(output_path),
             "duration_s": output_duration,
             "placements": [{"file": p["file"], "start_s": p["start_s"], "duration_s": p["duration_s"]} for p in placements],
-            "segments_placed": len(placements)
+            "segments_placed": len(placements),
+            # For agentic workflows: clearly show if placements were adjusted
+            "placements_adjusted": len(overlaps_fixed) > 0,
+            "adjusted_placements": [
+                {"file": p["file"], "requested_s": p["original_start_s"], "actual_s": p["start_s"]}
+                for p in placements
+            ]
         }
         
         if overlaps_fixed:

@@ -42,8 +42,19 @@ def ensure_dirs():
     TALKING_HEAD_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def generate_character_image(force_regenerate: bool = False) -> str:
-    """Generate a realistic friendly presenter character image using fal.ai."""
+def generate_character_image(force_regenerate: bool = False, style: str = "portrait") -> str:
+    """Generate a presenter character image using fal.ai.
+    
+    Args:
+        force_regenerate: Force regeneration even if cached image exists
+        style: "portrait" for square face (overlays) or "studio" for fullscreen YouTuber studio
+    
+    Returns:
+        Path to generated character image
+    """
+    if style == "studio":
+        return generate_studio_character_image(force_regenerate)
+    
     print("🎨 Generating realistic friendly presenter character...")
     
     character_path = TALKING_HEAD_DIR / "presenter_character_v2.png"
@@ -106,6 +117,84 @@ def generate_character_image(force_regenerate: bool = False) -> str:
             raise Exception(f"Failed to generate character: {response.text}")
     
     print(f"   ✅ Character saved to: {character_path}")
+    return str(character_path)
+
+
+def generate_studio_character_image(force_regenerate: bool = False) -> str:
+    """Generate a fullscreen YouTuber studio character image for intro/outro/segment.
+    
+    Creates a realistic presenter in a professional YouTuber studio setting,
+    suitable for fullscreen talking head segments (not overlays).
+    
+    Returns:
+        Path to generated studio character image (landscape 16:9)
+    """
+    print("🎨 Generating YouTuber studio presenter character...")
+    
+    character_path = TALKING_HEAD_DIR / "presenter_studio.png"
+    
+    # Check if we already have a studio character (unless forcing regeneration)
+    if not force_regenerate and character_path.exists() and character_path.stat().st_size > 0:
+        print(f"   ✅ Using existing studio character: {character_path}")
+        return str(character_path)
+    
+    # Prompt for fullscreen YouTuber studio scene
+    prompt = """Professional YouTuber in modern studio setup, front-facing view,
+    beautiful young woman content creator sitting at desk with microphone,
+    warm friendly smile, looking directly at camera,
+    professional studio lighting with soft key light,
+    modern minimalist studio background with subtle RGB accent lighting,
+    high-end camera quality, shallow depth of field,
+    clean professional setup like popular tech YouTuber,
+    casual but polished appearance, confident and engaging presence,
+    photorealistic 4K quality, cinematic color grading,
+    upper body visible, natural relaxed posture,
+    professional podcast or video studio aesthetic"""
+    
+    if USE_FAL_CLIENT:
+        os.environ["FAL_KEY"] = FAL_API_KEY
+        
+        result = fal_client.subscribe(
+            "fal-ai/flux/schnell",
+            arguments={
+                "prompt": prompt,
+                "image_size": "landscape_16_9",  # Fullscreen 16:9 aspect ratio
+                "num_images": 1,
+            },
+        )
+        
+        image_url = result["images"][0]["url"]
+        
+        # Download the image
+        import urllib.request
+        urllib.request.urlretrieve(image_url, str(character_path))
+    else:
+        import requests
+        headers = {
+            "Authorization": f"Key {FAL_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        
+        response = requests.post(
+            "https://queue.fal.run/fal-ai/flux/schnell",
+            headers=headers,
+            json={
+                "prompt": prompt,
+                "image_size": "landscape_16_9",  # Fullscreen 16:9 aspect ratio
+                "num_images": 1,
+            },
+            timeout=120
+        )
+        
+        if response.status_code == 200:
+            result = response.json()
+            image_url = result["images"][0]["url"]
+            img_response = requests.get(image_url, timeout=60)
+            character_path.write_bytes(img_response.content)
+        else:
+            raise Exception(f"Failed to generate studio character: {response.text}")
+    
+    print(f"   ✅ Studio character saved to: {character_path}")
     return str(character_path)
 
 

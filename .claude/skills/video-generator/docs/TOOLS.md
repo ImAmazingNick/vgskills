@@ -334,21 +334,41 @@ vg edit speed --video <input> --factor <num> --output <output> [options]
 
 ### `vg edit concat`
 
-Concatenate multiple videos.
+Concatenate multiple videos with automatic resolution normalization.
 
 ```bash
-vg edit concat --videos <paths> --output <output>
+vg edit concat --videos <paths> --output <output> [options]
 ```
 
 **Parameters:**
 - `--videos` (required): Comma-separated video paths
 - `--output` (required): Output video file
+- `--target-resolution` (optional): Target resolution (e.g., `1280x720`) or `auto` (default: largest non-square)
+
+**Resolution Handling:**
+- Automatically detects resolution mismatches (e.g., square TH + widescreen video)
+- Normalizes all inputs to target resolution with proper scaling/padding
+- Default: uses largest non-square resolution from inputs
+
+**Example:**
+```bash
+# Auto-detect resolution (recommended)
+vg edit concat --videos "th_intro.mp4,main.mp4" -o final.mp4
+
+# Force specific resolution
+vg edit concat --videos "th_intro.mp4,main.mp4" --target-resolution 1920x1080 -o final.mp4
+```
 
 ## 🎭 Talking Head Commands
 
+**Three types:**
+- **Overlay** (`create`, `generate`): Square for PiP overlays
+- **Segment** (`segment`, `intro`, `outro`): Fullscreen with YouTuber-style presenter
+- **Title** (`title`): AI-generated title cards (no presenter) via Grok Imagine Video
+
 ### `vg talking-head create`
 
-Create talking head from text in one step (TTS + generate). Convenience wrapper.
+Create **square** talking head from text (TTS + generate). For PiP overlays during video.
 
 ```bash
 vg talking-head create --text <text> --output <output> [options]
@@ -361,26 +381,99 @@ vg talking-head create --text <text> --output <output> [options]
 - `--model` (optional): Model (`omnihuman`, `sadtalker`) default: `omnihuman`
 - `--voice-id` (optional): ElevenLabs voice ID default: `21m00Tcm4TlvDq8ikWAM`
 
+**Output:** Square video (960x960) suitable for corner overlays.
+
 **Example:**
 ```bash
-vg talking-head create --text "Hi! I'm your AI guide." -o th_intro.mp4
+vg talking-head create --text "Watch this feature..." -o th_overlay.mp4
+```
+
+### `vg talking-head segment` / `intro` / `outro`
+
+Create **fullscreen** talking head segment at video resolution. For standalone intro/middle/outro segments.
+
+```bash
+vg talking-head segment --text <text> --output <output> [options]
+vg talking-head intro --text <text> --output <output> [options]   # Alias for segment
+vg talking-head outro --text <text> --output <output> [options]   # Alias for segment
+```
+
+**Parameters:**
+- `--text` (required): Text to speak
+- `--output`, `-o` (required): Output video file
+- `--match-video` (optional): Match resolution from this video (recommended)
+- `--resolution` (optional): Target resolution (e.g., `1280x720`)
+- `--character` (optional): Character image path (auto-generated if not provided)
+- `--background` (optional): Background style (`gradient`, `black`, `blur`) default: `gradient`
+- `--voice-id` (optional): ElevenLabs voice ID
+- `--model` (optional): Model (`omnihuman`, `sadtalker`) default: `omnihuman`
+
+**Output:** Video at specified resolution with natural YouTuber-style character framing.
+
+**Examples:**
+```bash
+# Match main video resolution (recommended)
+vg talking-head intro --text "Welcome!" --match-video main.mp4 -o intro.mp4
+
+# Specific resolution
+vg talking-head segment --text "Now let me explain..." --resolution 1280x720 -o transition.mp4
+
+# Outro with blur background
+vg talking-head outro --text "Thanks!" --match-video main.mp4 --background blur -o outro.mp4
 ```
 
 **Output:**
 ```json
 {
   "success": true,
-  "video": "th_intro.mp4",
-  "audio": "th_intro.mp3",
-  "duration_s": 2.1,
-  "model": "omnihuman",
-  "cached": false
+  "video": "intro.mp4",
+  "audio": "intro.mp3",
+  "duration_s": 3.2,
+  "resolution": "1280x720",
+  "background": "gradient",
+  "type": "segment"
+}
+```
+
+### `vg talking-head title`
+
+Create AI-generated title card video using **xAI Grok Imagine Video** (no presenter).
+
+```bash
+vg talking-head title --text <text> --output <output> [options]
+```
+
+**Parameters:**
+- `--text` (required): Title text to display
+- `--output`, `-o` (required): Output video file
+- `--duration` (optional): Duration in seconds (default: 3, min: 3)
+- `--match-video` (optional): Match resolution from this video
+- `--resolution` (optional): Target resolution (e.g., `1280x720`)
+- `--style` (optional): Visual style (default: `cinematic`)
+
+**Styles:** `cinematic`, `tech`, `minimal`, `gradient`, `dynamic`
+
+**Examples:**
+```bash
+vg talking-head title --text "Part 2: Dashboard Building" -o title.mp4
+vg talking-head title --text "Key Features" --style tech --match-video main.mp4 -o title.mp4
+```
+
+**Output:**
+```json
+{
+  "success": true,
+  "video": "title.mp4",
+  "duration_s": 3.0,
+  "resolution": "1920x1080",
+  "style": "cinematic",
+  "model": "grok-imagine-video"
 }
 ```
 
 ### `vg talking-head generate`
 
-Generate talking head video from audio.
+Generate talking head video from audio (square format).
 
 ```bash
 vg talking-head generate --audio <input> --output <output> [options]
@@ -517,38 +610,55 @@ vg compose distribute \
 **AGENTIC**: Place audio at AI-specified times with automatic overlap fixing.
 
 ```bash
-vg compose place --video <input> --audio <file:time> [--audio <file:time>...] --output <output>
+vg compose place --video <input> --audio <file:time> [--audio <file:time>...] --output <output> [options]
 ```
 
 **Parameters:**
 - `--video` (required): Video file
 - `--audio` (required, repeatable): Audio placement as `file.mp3:start_time`
 - `--output`, `-o` (required): Output video path
-- `--no-fix-overlaps` (optional): Disable automatic overlap fixing
+- `--strict` (optional): **Recommended for agentic workflows.** Fail on overlaps instead of auto-fixing
+- `--no-fix-overlaps` (optional): Disable automatic overlap fixing without failing
 
-**Auto-fix Overlaps (default ON):**
-- Sorts audio by start time
-- Detects overlaps based on duration
-- Delays overlapping segments by 300ms after previous ends
-- Reports fixes in output
+**Overlap Handling:**
 
-**Example:**
+| Flag | Behavior | Use Case |
+|------|----------|----------|
+| `--strict` | Fail on overlaps, return error | Agentic workflows (AI recalculates) |
+| (default) | Auto-fix overlaps, show VERY prominent warning | Legacy/interactive use |
+| `--no-fix-overlaps` | Neither fix nor fail, just warn | Manual control |
+
+**Example (strict mode - recommended for AI):**
 ```bash
-vg compose place \
-  --video demo.mp4 \
-  --audio intro.mp3:33.6 \
-  --audio prompt1.mp3:107.3 \
-  --audio reveal.mp3:261.3 \
-  -o final.mp4
+vg compose place --video demo.mp4 --audio intro.mp3:33.6 --audio reveal.mp3:35.0 --strict -o final.mp4
+# Fails if overlaps detected, AI should recalculate times
 ```
 
-**Output (with overlap fix):**
+**Example (auto-fix mode):**
+```bash
+vg compose place --video demo.mp4 --audio intro.mp3:33.6 --audio reveal.mp3:35.0 -o final.mp4
+# Fixes overlaps but shows VERY prominent warning
+```
+
+**Output (strict mode, overlap detected):**
+```json
+{
+  "success": false,
+  "error": "Overlapping segments detected. AI should recalculate times.",
+  "code": "OVERLAP_ERROR",
+  "overlaps": [{"file": "reveal.mp3", "overlap_s": 2.5}],
+  "suggestion": "Recalculate placement times with proper gaps"
+}
+```
+
+**Output (auto-fix mode, overlap fixed):**
 ```json
 {
   "success": true,
   "video": "final.mp4",
   "segments_placed": 3,
-  "overlaps_fixed": [{"file": "prompt1.mp3", "original_start": 35.0, "adjusted_start": 43.5}]
+  "placements_adjusted": true,
+  "overlaps_fixed": [{"file": "reveal.mp3", "original_start": 35.0, "adjusted_start": 43.5}]
 }
 ```
 

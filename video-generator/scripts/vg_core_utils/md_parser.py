@@ -35,16 +35,29 @@ class ParseError(Exception):
 def parse_voiceover_segments_from_md(md_content: str) -> List[Dict[str, Any]]:
     """
     Parse voiceover segments directly from a markdown file.
-
-    Looks for a table between <!-- VOICEOVER_SEGMENTS_START --> and <!-- VOICEOVER_SEGMENTS_END -->
-    Table format: | Segment | Anchor Marker | Offset | Text |
+    
+    SUPPORTS BOTH FORMATS:
+    1. Legacy table format: <!-- VOICEOVER_SEGMENTS_START --> table <!-- VOICEOVER_SEGMENTS_END -->
+    2. Agentic numbered-list format: ## Narration section with 1. **id** (hint): "text"
 
     Args:
         md_content: Raw markdown content
 
     Returns:
-        List of segment dictionaries with id, anchor_marker, offset, text
+        List of segment dictionaries with id, anchor, offset_s, text
     """
+    # Try legacy format first
+    segments = _parse_legacy_voiceover_table(md_content)
+    
+    # If empty, try agentic numbered-list format
+    if not segments:
+        segments = parse_agentic_narration_from_md(md_content)
+    
+    return segments
+
+
+def _parse_legacy_voiceover_table(md_content: str) -> List[Dict[str, Any]]:
+    """Parse legacy table format voiceover segments."""
     # Extract content between markers
     pattern = r'<!-- VOICEOVER_SEGMENTS_START -->(.*?)<!-- VOICEOVER_SEGMENTS_END -->'
     match = re.search(pattern, md_content, re.DOTALL)

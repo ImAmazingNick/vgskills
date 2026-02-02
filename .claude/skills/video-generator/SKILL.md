@@ -160,8 +160,15 @@ vg edit speed-gaps --video trimmed.mp4 --factor 3 \
 ### Step 4: Compose with explicit times
 
 ```bash
+# Recommended: Use --strict for agentic workflows (fails on overlaps instead of auto-fixing)
+vg compose place --video fast.mp4 --audio intro.mp3:10.2 --audio reveal.mp3:98.5 --strict -o final.mp4
+
+# Without --strict: auto-fixes overlaps but warns loudly
 vg compose place --video fast.mp4 --audio intro.mp3:10.2 --audio reveal.mp3:98.5 -o final.mp4
 ```
+
+**`--strict` mode:** Fails if overlaps detected. You recalculate times.
+**Without `--strict`:** Auto-fixes overlaps with 300ms gaps, but shows VERY prominent warning.
 
 ### CRITICAL: Workflow Order
 
@@ -182,93 +189,133 @@ WRONG: Record → Trim → Compose → Speed-silence (audio out of sync)
 
 ## Talking Heads
 
-User asks → You figure out timing and placement.
+**Three types** - use the right one:
 
-### Workflow A: Overlay TH (during video)
+| Type | Command | Resolution | Use Case |
+|------|---------|------------|----------|
+| **Overlay** | `vg talking-head create` | Square (960x960) | PiP during video narration |
+| **Segment** | `vg talking-head segment` / `intro` / `outro` | Video resolution | Standalone intro/middle/outro with presenter |
+| **Title** | `vg talking-head title` | Video resolution | AI-generated title cards (no presenter) |
 
-TH appears as picture-in-picture while narration plays.
+---
+
+### Overlay TH (square, PiP)
+
+TH appears as picture-in-picture while narration plays. **Square format is correct for overlays.**
 
 ```bash
-# Option 1: From existing audio
-vg talking-head generate --audio audio/intro.mp3 -o th_intro.mp4
-# → Returns: {"duration": 4.2}
+# Create square TH for overlay
+vg talking-head create --text "Watch this feature..." -o th_overlay.mp4
+# → Returns: {"video": "th_overlay.mp4", "duration_s": 2.1}
 
-# Option 2: Create from text (TTS + generate in one step)
-vg talking-head create --text "Hi! I'm your guide." -o th_intro.mp4
-# → Returns: {"video": "th_intro.mp4", "audio": "th_intro.mp3", "duration_s": 2.1}
-
-# Overlay at calculated time (you read timeline, add offset)
-vg talking-head overlay --video final.mp4 --overlay th_intro.mp4:33.6 -o final_th.mp4
+# Overlay at calculated time
+vg talking-head overlay --video final.mp4 --overlay th_overlay.mp4:33.6 -o final_th.mp4
 ```
 
-**CRITICAL:** The overlay command uses `-itsoffset` internally to sync TH frame 0 with the overlay start time.
+---
 
-### Workflow B: Fullscreen Intro TH
+### Fullscreen TH Segments (video resolution)
 
-TH appears fullscreen before main video starts.
+Standalone segments at start, middle, or end. **Auto-generates YouTuber studio character.**
+
+These commands create a realistic presenter in a professional YouTuber studio setting:
+- Full 16:9 aspect ratio (not a square face on background)
+- Professional studio lighting and setup
+- Suitable for intro, outro, or mid-video transitions
 
 ```bash
-# 1. Create TH
-vg talking-head create --text "Welcome! Let me show you something amazing." -o th_intro.mp4
-# → duration_s: 3.2
+# Intro (at start) - auto-generates studio character
+vg talking-head intro --text "Welcome!" --match-video main.mp4 -o th_intro.mp4
+# → Fullscreen YouTuber studio video at main.mp4's resolution
 
-# 2. Concat: TH first, then main video
+# Outro (at end)
+vg talking-head outro --text "Thanks for watching!" --match-video main.mp4 -o th_outro.mp4
+
+# In-between segment (middle of video)
+vg talking-head segment --text "Now let me explain..." --match-video main.mp4 -o th_transition.mp4
+
+# Or specify resolution directly
+vg talking-head segment --text "Hi!" --resolution 1280x720 -o th_segment.mp4
+
+# Use custom character image (must be 16:9 for fullscreen)
+vg talking-head intro --text "Hi!" --character my_studio.png --match-video main.mp4 -o th_intro.mp4
+```
+
+**Options:**
+- `--match-video`: Match resolution from existing video (recommended)
+- `--resolution`: Explicit resolution (e.g., `1280x720`)
+- `--character`: Custom character image (16:9 studio image recommended for fullscreen)
+
+---
+
+### Concatenating TH Segments
+
+Concat auto-normalizes resolutions now:
+
+```bash
+# Intro + main
 vg edit concat --videos "th_intro.mp4,main.mp4" -o final.mp4
 
-# 3. Recalculate all subsequent times
-# All marker times += 3.2s (TH duration)
-# t_page_loaded: 25.11 → 28.31
-```
-
-### Workflow C: Fullscreen Outro TH
-
-TH appears at the end.
-
-```bash
-# 1. Create TH
-vg talking-head create --text "Thanks for watching!" -o th_outro.mp4
-
-# 2. Concat: main video first, then TH
+# Main + outro
 vg edit concat --videos "main.mp4,th_outro.mp4" -o final.mp4
 
-# No time recalculation needed (TH is at end)
+# Intro + middle + outro
+vg edit concat --videos "th_intro.mp4,part1.mp4,th_transition.mp4,part2.mp4,th_outro.mp4" -o final.mp4
 ```
 
-### Workflow D: Insert TH Between Segments
+**CRITICAL:** Recalculate times after concat. TH at start pushes all times forward.
 
-Insert a TH segment in the middle of the video.
+---
+
+### Title Card Videos (AI-generated transitions)
+
+Create cinematic title/transition videos without a presenter using **xAI Grok Imagine Video**. Perfect for section headers.
 
 ```bash
-# 1. Determine insert point (e.g., after intro ends at t=15s)
-# 2. Split video
-vg edit trim --video main.mp4 --end 15 -o before.mp4
-vg edit trim --video main.mp4 --start 15 -o after.mp4
+# Basic title card
+vg talking-head title --text "Part 2: Dashboard Building" -o title.mp4
 
-# 3. Create TH
-vg talking-head create --text "Now let me show you more." -o th_middle.mp4
-# → duration_s: 4.0
+# With style and matching resolution
+vg talking-head title --text "Key Features" --style tech --match-video main.mp4 -o title.mp4
 
-# 4. Concat
-vg edit concat --videos "before.mp4,th_middle.mp4,after.mp4" -o final.mp4
-
-# 5. Recalculate: times > 15s get += 4.0s
+# Custom duration (minimum 3s, Grok generates 6s then trims)
+vg talking-head title --text "Summary" --duration 3 --style minimal -o title.mp4
 ```
 
-**CRITICAL:** You always recalculate times after concat. Tools don't do this automatically.
+**Styles:**
+- `cinematic` (default) — Dramatic lighting, elegant typography
+- `tech` — Futuristic, neon accents, digital aesthetic
+- `minimal` — Clean, simple, professional
+- `gradient` — Colorful flowing backgrounds
+- `dynamic` — Energetic motion graphics
+
+**Note:** Uses `xai/grok-imagine-video/text-to-video` for direct text-to-video generation.
+
+---
+
+### When to Use Which
+
+| Scenario | Command |
+|----------|---------|
+| Narration during video (PiP) | `vg talking-head create` + `overlay` |
+| Welcome/hook before main | `vg talking-head intro` + `concat` |
+| Section header (no presenter) | `vg talking-head title` + `concat` |
+| Transition between sections | `vg talking-head segment` + `concat` |
+| Call-to-action at end | `vg talking-head outro` + `concat` |
+| No talking head | Just use voiceover audio |
+
+---
 
 ### Request File TH Section
-
-Users can specify TH-specific text in `## Talking Heads`:
 
 ```markdown
 ## Talking Heads
 1. **th_intro** (at: 0): "Hi! I'm your guide."
 2. **th_processing** (at: t_processing1_started + 5s): "Working..."
+3. **th_outro** (at: end): "Thanks for watching!"
 ```
 
 Timing hints: `0` (intro), `end` (outro), `t_marker`, `t_marker + 5s`
-
-Positions: `bottom-right`, `bottom-left`, `top-right`, `top-left`
 
 ---
 
@@ -284,18 +331,26 @@ Positions: `bottom-right`, `bottom-left`, `top-right`, `top-left`
 | TTS batch | `vg audio batch --request demo.md -o audio/` |
 | **Edit** | |
 | Trim | `vg edit trim --video v.mp4 --start 5 -o out.mp4` |
+| Concat (auto-normalizes resolution) | `vg edit concat --videos "a.mp4,b.mp4" -o out.mp4` |
 | Speed gaps | `vg edit speed-gaps --video v.mp4 --request r.md --timeline t.md --audio-dir audio/ --factor 3 -o fast.mp4` |
 | Speed silence | `vg edit speed-silence --video v.mp4 --factor 3 -o out.mp4` |
 | **Compose** | |
 | Simple sync | `vg compose sync --video v.mp4 --audio a.mp3 -o final.mp4` |
-| Place at times | `vg compose place --video v.mp4 --audio a.mp3:10.5 -o final.mp4` (auto-fixes overlaps) |
+| Place at times (strict) | `vg compose place --video v.mp4 --audio a.mp3:10.5 --strict -o final.mp4` (fails on overlap) |
+| Place at times (auto-fix) | `vg compose place --video v.mp4 --audio a.mp3:10.5 -o final.mp4` (fixes overlaps, warns loudly) |
 | **Captions** | |
 | Streaming | `vg captions streaming --video v.mp4 --request r.md --timeline t.md --audio-dir audio/ -o final.mp4` |
 | Burn SRT | `vg captions burn --video v.mp4 --captions c.srt -o final.mp4` |
-| **Talking Head** | |
-| Create from text | `vg talking-head create --text "Hi!" -o th.mp4` (TTS + generate) |
+| **Talking Head - Overlay (square, PiP)** | |
+| Create from text | `vg talking-head create --text "Hi!" -o th.mp4` (TTS + generate, square) |
 | Generate from audio | `vg talking-head generate --audio a.mp3 -o presenter.mp4` |
 | Overlay at time | `vg talking-head overlay --video v.mp4 --overlay th.mp4:10.5 -o final.mp4` |
+| **Talking Head - Segment (video resolution)** | |
+| Intro segment | `vg talking-head intro --text "Welcome!" --match-video main.mp4 -o intro.mp4` |
+| Outro segment | `vg talking-head outro --text "Thanks!" --match-video main.mp4 -o outro.mp4` |
+| Any segment | `vg talking-head segment --text "..." --resolution 1280x720 -o seg.mp4` |
+| **Title Cards (AI-generated, no presenter)** | |
+| Title video | `vg talking-head title --text "Part 2" --style cinematic -o title.mp4` |
 | **Utils** | |
 | Video info | `vg info --file video.mp4` |
 | Convert webm→mp4 | `./node_modules/ffmpeg-static/ffmpeg -i in.webm -c:v libx264 out.mp4` |
@@ -372,6 +427,12 @@ export FAL_API_KEY=...         # Optional, talking heads
 | Audio out of sync | Wrong order. Do: TTS → speed-gaps → compose |
 | webm not playing | Convert to mp4 first |
 | speed-gaps "placements required" | Use `--request + --timeline + --audio-dir` (never create JSON manually) |
+| speed-gaps crashes "no audio" | Fixed: now handles videos without audio track |
+| Markers all 0.00s | Fixed: was bug in agent-browser start time tracking |
+| talking-head create crashes | Fixed: now auto-generates character if not provided |
+| concat outputs square video | Fixed: auto-normalizes resolution. Or use `--target-resolution 1280x720` |
+| Intro/outro TH is square | Fixed: `intro/outro/segment` now auto-generate YouTuber studio character (fullscreen 16:9). Use `create` only for PiP overlays. |
+| compose place shifts times silently | Use `--strict` flag to fail on overlaps instead |
 | Dropdown not visible | Use keyboard: `press ArrowDown` → `press Enter` |
 | AI agent shows error | IGNORE IT. "Data Query Error" etc. = normal. Don't stop. Keep snapshotting until result appears. |
 | Click blocked | Press Escape first |

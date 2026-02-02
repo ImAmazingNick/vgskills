@@ -47,9 +47,11 @@ def register(subparsers):
     silence_parser.set_defaults(func=cmd_speed_silence)
 
     # vg edit concat
-    concat_parser = edit_sub.add_parser('concat', help='Concatenate videos')
+    concat_parser = edit_sub.add_parser('concat', help='Concatenate videos (auto-normalizes resolution)')
     concat_parser.add_argument('--videos', required=True, help='Comma-separated video paths')
     concat_parser.add_argument('--output', '-o', required=True, help='Output video path')
+    concat_parser.add_argument('--target-resolution', 
+                              help='Target resolution (e.g., "1280x720") or "auto" (default: largest non-square)')
     concat_parser.set_defaults(func=cmd_concat)
 
     # vg edit speed-gaps (NEW - the right way to speed up videos with voiceover)
@@ -119,7 +121,8 @@ def cmd_concat(args) -> dict:
 
     return concat_videos(
         input_paths=video_paths,
-        output_path=args.output
+        output_path=args.output,
+        target_resolution=getattr(args, 'target_resolution', None)
     )
 
 

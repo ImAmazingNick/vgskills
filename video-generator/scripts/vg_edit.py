@@ -7,8 +7,9 @@ Wraps video_editor.py for CLI integration.
 from pathlib import Path
 from typing import List, Dict, Optional, Tuple
 import shutil
+import subprocess
 
-from video_editor import edit_video, get_ffmpeg, extract_segment, concatenate_segments, get_video_duration
+from video_editor import edit_video, get_ffmpeg, extract_segment, concatenate_segments, get_video_duration, has_audio_track
 from vg_common import VGError, classify_error, get_suggestion, get_duration
 
 def trim_video(
@@ -325,6 +326,22 @@ def speed_silence(
         output.parent.mkdir(parents=True, exist_ok=True)
 
         ffmpeg = get_ffmpeg()
+        
+        # Check for audio track first - can't detect silence without audio
+        if not has_audio_track(ffmpeg, str(video)):
+            # Copy video as-is, can't detect silence without audio
+            import shutil
+            shutil.copy2(video, output)
+            return {
+                "success": True,
+                "video": str(output),
+                "duration": get_video_duration(ffmpeg, str(output)),
+                "size": output.stat().st_size,
+                "operation": "speed_silence",
+                "silent_sections": 0,
+                "note": "Video has no audio track; cannot detect silence. Video copied unchanged."
+            }
+        
         duration = get_video_duration(ffmpeg, str(video))
 
         # Detect silence intervals using ffmpeg silencedetect
@@ -838,12 +855,65 @@ def speed_gaps(
         }
 
 
+def _get_video_resolution(ffmpeg: str, video_path: str) -> Tuple[int, int]:
+    """Get video resolution (width, height)."""
+    import re
+    result = subprocess.run(
+        [ffmpeg, "-i", video_path],
+        capture_output=True, text=True
+    )
+    # Look for video stream resolution - match "WIDTHxHEIGHT" after "Video:" line
+    # Handles common resolutions: 640x480, 1280x720, 1920x1080, 3840x2160, etc.
+    video_match = re.search(r'Video:.*?(\d{3,5})x(\d{3,5})', result.stderr)
+    if video_match:
+        return int(video_match.group(1)), int(video_match.group(2))
+    return 0, 0
+
+
+def _scale_video_to_resolution(
+    ffmpeg: str,
+    input_path: str,
+    output_path: str,
+    target_w: int,
+    target_h: int
+) -> str:
+    """Scale/pad video to target resolution, maintaining aspect ratio."""
+    # Use scale + pad to center video in target frame
+    filter_str = (
+        f"scale={target_w}:{target_h}:force_original_aspect_ratio=decrease,"
+        f"pad={target_w}:{target_h}:(ow-iw)/2:(oh-ih)/2:black"
+    )
+    
+    cmd = [
+        ffmpeg, "-y",
+        "-i", input_path,
+        "-vf", filter_str,
+        "-c:v", "libx264", "-preset", "fast", "-crf", "20",
+        "-c:a", "copy",
+        "-pix_fmt", "yuv420p",
+        output_path
+    ]
+    
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+    if result.returncode != 0:
+        raise RuntimeError(f"Failed to scale video: {result.stderr[:500]}")
+    
+    return output_path
+
+
 def concat_videos(
     input_paths: List[str],
-    output_path: str
+    output_path: str,
+    target_resolution: str = None
 ) -> dict:
     """
-    Concatenate multiple videos.
+    Concatenate multiple videos with resolution normalization.
+    
+    Args:
+        input_paths: List of video file paths
+        output_path: Output file path
+        target_resolution: Target resolution (e.g., "1280x720") or "auto"
+                          If "auto" or None, uses largest non-square resolution
     """
     try:
         videos = [Path(p) for p in input_paths]
@@ -857,52 +927,107 @@ def concat_videos(
         # Ensure output directory exists
         output.parent.mkdir(parents=True, exist_ok=True)
 
-        # For now, implement simple concatenation
-        # This is a basic implementation - could be enhanced with proper format handling
         if len(videos) < 2:
             raise ValueError("Need at least 2 videos to concatenate")
 
-        # Create a temporary concat file
+        # Get ffmpeg
+        from vg_common import require_ffmpeg
+        ffmpeg = require_ffmpeg()
+        
+        # Check resolutions
+        resolutions = []
+        for v in videos:
+            w, h = _get_video_resolution(ffmpeg, str(v))
+            resolutions.append((w, h))
+            print(f"   📐 {v.name}: {w}x{h}")
+        
+        # Check if all resolutions match
+        all_match = len(set(resolutions)) == 1
+        
+        if all_match:
+            # Simple concat - all same resolution
+            target_w, target_h = resolutions[0]
+            print(f"   ✅ All videos match: {target_w}x{target_h}")
+            scaled_videos = [str(v) for v in videos]
+            needs_cleanup = False
+        else:
+            # Need to normalize resolutions
+            print(f"   ⚠️  Resolution mismatch detected - normalizing...")
+            
+            # Determine target resolution
+            if target_resolution and target_resolution != "auto":
+                target_w, target_h = map(int, target_resolution.lower().split('x'))
+            else:
+                # Auto: use largest non-square resolution, or largest overall
+                non_square = [(w, h) for w, h in resolutions if w != h]
+                if non_square:
+                    target_w, target_h = max(non_square, key=lambda x: x[0] * x[1])
+                else:
+                    target_w, target_h = max(resolutions, key=lambda x: x[0] * x[1])
+            
+            print(f"   🎯 Target resolution: {target_w}x{target_h}")
+            
+            # Scale videos that don't match
+            import tempfile
+            temp_dir = Path(tempfile.mkdtemp())
+            scaled_videos = []
+            needs_cleanup = True
+            
+            for i, (v, (w, h)) in enumerate(zip(videos, resolutions)):
+                if w == target_w and h == target_h:
+                    scaled_videos.append(str(v))
+                    print(f"   ✓ {v.name}: already {w}x{h}")
+                else:
+                    scaled_path = str(temp_dir / f"scaled_{i:03d}.mp4")
+                    print(f"   🔄 {v.name}: {w}x{h} → {target_w}x{target_h}")
+                    _scale_video_to_resolution(ffmpeg, str(v), scaled_path, target_w, target_h)
+                    scaled_videos.append(scaled_path)
+
+        # Create concat file
         import tempfile
         with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
-            for video in videos:
-                f.write(f"file '{video.absolute()}'\n")
+            for video in scaled_videos:
+                f.write(f"file '{Path(video).absolute()}'\n")
             concat_file = f.name
 
-        # Get ffmpeg using consolidated function
-        from vg_common import require_ffmpeg
-        
-        ffmpeg = require_ffmpeg()
-
-        # Use ffmpeg concat
+        # Use ffmpeg concat with re-encoding to ensure compatibility
         cmd = [
             ffmpeg, "-y", "-f", "concat", "-safe", "0",
             "-i", concat_file,
-            "-c", "copy",
+            "-c:v", "libx264", "-preset", "medium", "-crf", "20",
+            "-c:a", "aac", "-b:a", "192k",
+            "-pix_fmt", "yuv420p",
+            "-movflags", "+faststart",
             str(output)
         ]
 
-        import subprocess
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
 
-        # Clean up temp file
+        # Clean up
         Path(concat_file).unlink(missing_ok=True)
+        if needs_cleanup and 'temp_dir' in locals():
+            for f in temp_dir.glob("*.mp4"):
+                f.unlink(missing_ok=True)
+            temp_dir.rmdir()
 
         if result.returncode != 0:
             raise RuntimeError(f"FFmpeg concat failed: {result.stderr}")
 
-        # Get final duration and size
+        # Get final duration
         final_duration = get_duration(output)
-        total_size = sum(get_duration(v) for v in videos)
+        total_input_duration = sum(get_duration(v) for v in videos)
 
         return {
             "success": True,
             "video": str(output),
             "duration": final_duration,
+            "duration_s": final_duration,
             "size": output.stat().st_size,
             "operation": "concat",
             "videos_concatenated": len(videos),
-            "expected_duration": total_size
+            "expected_duration": total_input_duration,
+            "resolution": f"{target_w}x{target_h}",
+            "resolutions_normalized": not all_match
         }
 
     except Exception as e:

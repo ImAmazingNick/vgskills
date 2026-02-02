@@ -94,7 +94,7 @@ class AgentBrowserSession:
         self.recording_path = self.raw_dir / f"{session_id}.webm"
         self.timeline_markers: List[Dict[str, Any]] = []
         self.recording_started = False
-        self.recording_start_time: float = 0
+        self.recording_start_time: Optional[float] = None  # None until recording starts
         self.browser_opened = False
         
         # Find Chrome executable - use provided path or auto-detect
@@ -465,10 +465,11 @@ class AgentBrowserSession:
     
     def _add_marker(self, name: str) -> float:
         """Internal: add marker with timestamp relative to recording start."""
-        if self.recording_start_time:
-            marker_time = time.time() - self.recording_start_time
-        else:
+        if self.recording_start_time is None:
+            print(f"⚠️  Warning: Marker '{name}' added before recording started - time will be 0.0s")
             marker_time = 0.0
+        else:
+            marker_time = time.time() - self.recording_start_time
             
         self.timeline_markers.append({
             "name": name,

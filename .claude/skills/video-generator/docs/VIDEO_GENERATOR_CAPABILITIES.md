@@ -41,6 +41,7 @@
 | **Video Processing** | FFmpeg | Editing, conversion, composition |
 | **Text-to-Speech** | ElevenLabs API | Voice generation |
 | **Talking Heads** | FAL.ai (OmniHuman, SadTalker) | AI presenter generation |
+| **Title Cards** | xAI Grok Imagine Video | AI-generated title videos |
 | **Character Generation** | FAL.ai Flux Schnell | AI character images |
 | **Media Analysis** | FFprobe | Duration, metadata extraction |
 | **CLI Framework** | argparse | Command structure |
@@ -521,6 +522,25 @@ vg talking-head composite --video demo.mp4 --talking-head presenter.mp4 --positi
 **Example:**
 ```bash
 vg talking-head overlay --video demo.mp4 --overlay th.mp4:47.6 --position bottom-right -o final.mp4
+```
+
+#### Title Card Generation (Grok Imagine Video)
+| Type | CLI Command | Files | Description |
+|------|-------------|-------|-------------|
+| **Action** | `vg talking-head title` | `vg_commands/talking_head.py` | AI title card video |
+| **Function** | `cmd_title()` | `vg_commands/talking_head.py` | Grok Imagine text-to-video |
+
+**Capabilities:**
+- ✅ AI-generated title cards via **xAI Grok Imagine Video** (`xai/grok-imagine-video/text-to-video`)
+- ✅ Direct text-to-video (no intermediate image step)
+- ✅ Multiple visual styles: `cinematic`, `tech`, `minimal`, `gradient`, `dynamic`
+- ✅ Resolution matching from reference video
+- ✅ Automatic scaling and trimming
+
+**Example:**
+```bash
+vg talking-head title --text "Part 2: Building" --style tech -o title.mp4
+# Returns: {"video": "title.mp4", "duration_s": 3.0, "model": "grok-imagine-video"}
 ```
 
 ---
@@ -1110,7 +1130,8 @@ virthrillove/                           # Workspace root
 | Service | Purpose | API Key Env Var | Required For |
 |---------|---------|-----------------|--------------|
 | **ElevenLabs** | Text-to-Speech | `ELEVENLABS_API_KEY` | `audio tts`, `audio batch`, `request generate` |
-| **FAL.ai** | Talking heads, Characters | `FAL_API_KEY` | `talking-head generate` |
+| **FAL.ai** | Talking heads, Characters, Title cards | `FAL_API_KEY` | `talking-head generate`, `talking-head title` |
+| **xAI Grok Imagine** | AI video generation (via FAL.ai) | `FAL_API_KEY` | `talking-head title` |
 | **Playwright** | Browser automation | - (installed) | `record`, `record session`, `record screenshot` |
 | **FFmpeg** | Video/audio processing | - (system or npm) | All video operations |
 
@@ -1159,7 +1180,7 @@ virthrillove/                           # Workspace root
 | **Total Python modules** | 38+ |
 | **CLI command groups** | 16 |
 | **Core capabilities** | 18 categories |
-| **External integrations** | 5 (ElevenLabs, FAL.ai, Playwright, FFmpeg, agent-browser) |
+| **External integrations** | 6 (ElevenLabs, FAL.ai, xAI Grok, Playwright, FFmpeg, agent-browser) |
 | **Supported file formats** | MP4, WebM, MP3, M4A, WAV, JSON, Markdown, SRT, VTT, ASS |
 | **Cache types** | TTS (24h), Talking Heads (24h), Characters (persistent) |
 | **Browser drivers** | 2 (Playwright CSS selectors, agent-browser refs) |
