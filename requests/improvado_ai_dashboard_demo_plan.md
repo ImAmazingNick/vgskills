@@ -5,7 +5,6 @@ Create a demo video showing Improvado's AI agent building a cross-channel market
 
 ## Target
 - **URL:** https://report.improvado.io/experimental/agent/new-agent/?workspace=121
-- **Cookie:** dts_sessionid=j7gjsg7hsozunox3oamr299l45vo3nsp
 - **Cookie Domain:** .improvado.io
 - **Run ID:** improvado_ai_dashboard
 
