@@ -248,7 +248,89 @@ vg audio batch --segments segments.json --output-dir ./voiceovers --voice alloy
 vg list --type audio --recent 10
 ```
 
-## 🎭 Talking Head Productions
+## 🎭 Talking Head & Title Card Productions
+
+### Three Types of Segments
+
+| Type | Command | Format | Use Case |
+|------|---------|--------|----------|
+| **Overlay** | `create` | Square (PiP) | Narration during video |
+| **Segment** | `intro`/`outro`/`segment` | Fullscreen | YouTuber-style presenter |
+| **Title** | `title` | Fullscreen | AI-generated section headers |
+
+---
+
+### AI-Generated Title Cards (Grok Imagine Video)
+
+Create cinematic title/transition videos without a presenter.
+
+```bash
+# Basic title card
+vg talking-head title --text "Part 2: Building the Dashboard" -o title.mp4
+# Returns: {"video": "title.mp4", "duration_s": 3.0, "model": "grok-imagine-video"}
+
+# With visual style
+vg talking-head title --text "Key Features" --style tech -o title_tech.mp4
+# Styles: cinematic, tech, minimal, gradient, dynamic
+
+# Match resolution from main video
+vg talking-head title --text "Summary" --style minimal --match-video main.mp4 -o title.mp4
+```
+
+**Use title cards for:**
+- Section headers between parts
+- Topic introductions
+- Transitions without a presenter
+
+---
+
+### Fullscreen Presenter Segments (YouTuber Style)
+
+Create intro/outro/mid-roll segments with AI presenter in studio setting.
+
+```bash
+# Intro with auto-generated YouTuber-style character
+vg talking-head intro --text "Welcome to our AI demo!" --match-video main.mp4 -o intro.mp4
+# Returns: {"video": "intro.mp4", "duration_s": 3.2, "style": "studio"}
+
+# Outro
+vg talking-head outro --text "Thanks for watching!" --match-video main.mp4 -o outro.mp4
+
+# Mid-roll segment
+vg talking-head segment --text "Now let me explain this feature..." --resolution 1920x1080 -o mid.mp4
+```
+
+**Use fullscreen segments for:**
+- Opening hook/welcome
+- Explanations between demos
+- Closing call-to-action
+
+---
+
+### Complete Example: Video with Title + Intro + Demo + Outro
+
+```bash
+# 1. Create title card (AI-generated, no presenter)
+vg talking-head title --text "Improvado AI Agent Demo" --style cinematic -o title.mp4
+# Returns: {"duration_s": 3.0}
+
+# 2. Create YouTuber-style intro (fullscreen presenter)
+vg talking-head intro --text "Hey! Let me show you how to create dashboards in seconds." --resolution 1920x1080 -o intro.mp4
+# Returns: {"duration_s": 4.5}
+
+# 3. Main demo video (already recorded)
+# demo.mp4 - 60 seconds
+
+# 4. Create outro
+vg talking-head outro --text "That's it! Try it yourself at improvado.io" --match-video demo.mp4 -o outro.mp4
+# Returns: {"duration_s": 3.8}
+
+# 5. Concatenate everything
+vg edit concat --videos "title.mp4,intro.mp4,demo.mp4,outro.mp4" -o final.mp4
+# Result: title (3s) + intro (4.5s) + demo (60s) + outro (3.8s) = 71.3s
+```
+
+---
 
 ### Agentic Approach: User Asks, AI Figures Out
 
@@ -495,5 +577,58 @@ vg audio tts --text "Powerful admin controls let you..." --output admin_narratio
 vg edit concat --videos "videos/runs/buyer_view/demo.mp4,videos/runs/admin_view/demo.mp4" --output combined_demo.mp4
 vg compose sync --video combined_demo.mp4 --audio buyer_narration.mp3 --output sales_demo.mp4
 ```
+
+### Professional Multi-Part Demo with Title Cards
+
+**Goal:** Create a polished 3-part demo video with title cards and presenter segments.
+
+```bash
+# === TITLE CARDS ===
+vg talking-head title --text "Improvado AI Agent" --style cinematic -o title_main.mp4
+vg talking-head title --text "Part 1: Dashboard Creation" --style tech -o title_p1.mp4
+vg talking-head title --text "Part 2: Data Analysis" --style tech -o title_p2.mp4
+vg talking-head title --text "Part 3: Sharing & Export" --style tech -o title_p3.mp4
+
+# === PRESENTER SEGMENTS ===
+vg talking-head intro --text "Hey! I'm going to show you three powerful features of Improvado." --resolution 1920x1080 -o intro.mp4
+vg talking-head segment --text "Let's move on to data analysis..." --resolution 1920x1080 -o transition_p2.mp4
+vg talking-head segment --text "Finally, let's see how to share your work..." --resolution 1920x1080 -o transition_p3.mp4
+vg talking-head outro --text "That's everything! Start building at improvado.io" --resolution 1920x1080 -o outro.mp4
+
+# === DEMO CLIPS (already recorded) ===
+# part1_demo.mp4, part2_demo.mp4, part3_demo.mp4
+
+# === ASSEMBLE FINAL VIDEO ===
+vg edit concat --videos "\
+title_main.mp4,\
+intro.mp4,\
+title_p1.mp4,\
+part1_demo.mp4,\
+transition_p2.mp4,\
+title_p2.mp4,\
+part2_demo.mp4,\
+transition_p3.mp4,\
+title_p3.mp4,\
+part3_demo.mp4,\
+outro.mp4" -o final_complete.mp4
+
+# === ADD VOICEOVER TO DEMOS (optional) ===
+# If demos need narration, compose audio before concatenating
+```
+
+**Structure:**
+1. Main title (cinematic) → 3s
+2. Intro presenter → 5s
+3. Part 1 title → 3s
+4. Part 1 demo → varies
+5. Transition presenter → 3s
+6. Part 2 title → 3s
+7. Part 2 demo → varies
+8. Transition presenter → 3s
+9. Part 3 title → 3s
+10. Part 3 demo → varies
+11. Outro presenter → 4s
+
+---
 
 These examples demonstrate the full range of capabilities available through the `vg` CLI. Claude can compose these tools to fulfill any video generation request, from simple recordings to complex multi-step productions.
