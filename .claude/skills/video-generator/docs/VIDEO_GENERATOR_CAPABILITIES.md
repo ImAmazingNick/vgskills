@@ -1,7 +1,7 @@
 # Video Generator - Complete Capabilities Reference
 
-> **Version**: 1.1  
-> **Last Updated**: January 2026  
+> **Version**: 1.2  
+> **Last Updated**: February 2026  
 > **Entry Point**: `scripts/vg` (CLI)
 
 ---

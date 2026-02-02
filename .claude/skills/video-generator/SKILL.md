@@ -367,7 +367,8 @@ export FAL_API_KEY=...         # Optional, talking heads
 | Problem | Solution |
 |---------|----------|
 | TTS 403 error | Rate limit. Wait 5s, retry. |
-| Recording blank | Auth cookie expired |
+| Recording blank | Auth cookie expired or not applied |
+| Login page despite cookie | Cookie domain wrong. Use `.example.com` (with leading dot) |
 | Audio out of sync | Wrong order. Do: TTS → speed-gaps → compose |
 | webm not playing | Convert to mp4 first |
 | speed-gaps "placements required" | Use `--request + --timeline + --audio-dir` (never create JSON manually) |
