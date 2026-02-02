@@ -427,8 +427,8 @@ def normalize_path(path: Union[str, Path], must_exist: bool = False) -> Path:
 
 # Environment variable validation
 ENV_VARS = {
-    "ELEVENLABS_API_KEY": {"required_for": ["audio.tts"], "optional": False},
-    "FAL_API_KEY": {"required_for": ["talking-head.generate"], "optional": False},
+    "ELEVENLABS_API_KEY": {"required_for": ["audio.tts", "talking-head.create"], "optional": False},
+    "FAL_API_KEY": {"required_for": ["talking-head.generate", "talking-head.create"], "optional": False},
     "DTS_SESSIONID": {"required_for": ["record"], "optional": True}
 }
 

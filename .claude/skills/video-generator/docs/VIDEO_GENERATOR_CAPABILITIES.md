@@ -452,6 +452,23 @@ vg edit concat --videos "part1.mp4,part2.mp4,part3.mp4" --output combined.mp4
 - ✅ Persistent character caching
 - ✅ Friendly, professional appearance
 
+#### Talking Head Creation (Convenience Wrapper)
+| Type | CLI Command | Files | Description |
+|------|-------------|-------|-------------|
+| **Action** | `vg talking-head create` | `vg_commands/talking_head.py` | TTS + generate in one step |
+| **Function** | `cmd_create()` | `vg_commands/talking_head.py` | Convenience wrapper |
+
+**Capabilities:**
+- ✅ Create talking head from text in one command
+- ✅ Combines TTS + generate steps
+- ✅ Returns duration for AI placement calculations
+
+**Example:**
+```bash
+vg talking-head create --text "Hi! I'm your guide." -o th_intro.mp4
+# Returns: {"video": "th_intro.mp4", "audio": "th_intro.mp3", "duration_s": 2.1}
+```
+
 #### Talking Head Video Generation
 | Type | CLI Command | Files | Description |
 |------|-------------|-------|-------------|
@@ -488,7 +505,7 @@ vg talking-head generate --audio narration.mp3 --model omnihuman --output presen
 vg talking-head composite --video demo.mp4 --talking-head presenter.mp4 --position bottom-right --size 280 --output final.mp4
 ```
 
-#### Agentic Talking Head Overlay (NEW)
+#### Agentic Talking Head Overlay
 | Type | CLI Command | Files | Description |
 |------|-------------|-------|-------------|
 | **Action** | `vg talking-head overlay` | `vg_commands/talking_head.py` | AI-controlled overlay |
@@ -497,7 +514,9 @@ vg talking-head composite --video demo.mp4 --talking-head presenter.mp4 --positi
 **Capabilities:**
 - ✅ Overlay multiple talking heads at AI-specified times
 - ✅ No marker matching logic (AI provides exact times)
-- ✅ FFmpeg overlay filters
+- ✅ FFmpeg overlay filters with `-itsoffset` for proper sync
+- ✅ Validates overlay times don't exceed video duration
+- ✅ Warns if TH extends past video end
 
 **Example:**
 ```bash

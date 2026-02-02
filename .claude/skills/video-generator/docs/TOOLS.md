@@ -346,6 +346,38 @@ vg edit concat --videos <paths> --output <output>
 
 ## 🎭 Talking Head Commands
 
+### `vg talking-head create`
+
+Create talking head from text in one step (TTS + generate). Convenience wrapper.
+
+```bash
+vg talking-head create --text <text> --output <output> [options]
+```
+
+**Parameters:**
+- `--text` (required): Text to speak
+- `--output`, `-o` (required): Output video file
+- `--character` (optional): Character image path (auto-generated if not provided)
+- `--model` (optional): Model (`omnihuman`, `sadtalker`) default: `omnihuman`
+- `--voice-id` (optional): ElevenLabs voice ID default: `21m00Tcm4TlvDq8ikWAM`
+
+**Example:**
+```bash
+vg talking-head create --text "Hi! I'm your AI guide." -o th_intro.mp4
+```
+
+**Output:**
+```json
+{
+  "success": true,
+  "video": "th_intro.mp4",
+  "audio": "th_intro.mp3",
+  "duration_s": 2.1,
+  "model": "omnihuman",
+  "cached": false
+}
+```
+
 ### `vg talking-head generate`
 
 Generate talking head video from audio.
@@ -359,6 +391,37 @@ vg talking-head generate --audio <input> --output <output> [options]
 - `--output` (required): Output video file
 - `--character` (optional): Character image path
 - `--model` (optional): Model (`omnihuman`, `sadtalker`) default: `omnihuman`
+
+### `vg talking-head overlay`
+
+Overlay talking heads at AI-specified times (agentic). AI calculates exact times.
+
+```bash
+vg talking-head overlay --video <main> --overlay <file:time> [--overlay <file:time>...] --output <output> [options]
+```
+
+**Parameters:**
+- `--video` (required): Main video file
+- `--overlay` (required, repeatable): Overlay placement as `file.mp4:start_time`
+- `--output`, `-o` (required): Output video file
+- `--position` (optional): Position (`top-left`, `top-right`, `bottom-left`, `bottom-right`) default: `bottom-right`
+- `--size` (optional): Size in pixels default: `280`
+
+**Example:**
+```bash
+vg talking-head overlay --video demo.mp4 --overlay th_intro.mp4:33.6 --overlay th_outro.mp4:125.0 -o final.mp4
+```
+
+**Output:**
+```json
+{
+  "success": true,
+  "video": "final.mp4",
+  "duration_s": 135.2,
+  "overlays_applied": 2,
+  "position": "bottom-right"
+}
+```
 
 ### `vg talking-head composite`
 

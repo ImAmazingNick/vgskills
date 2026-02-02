@@ -1,7 +1,7 @@
 # Video Generator Architecture
 
-> **Version:** 2.1  
-> **Last Updated:** January 2026  
+> **Version:** 2.2  
+> **Last Updated:** February 2026  
 > **Purpose:** Complete architecture overview with workflows and data flows
 
 ---
@@ -424,7 +424,14 @@ Whether user provides a request file or asks conversationally, the flow is the s
 ├──────────────────────────────────────────────────────────────────────────┤
 │                                                                          │
 │  Talking heads (if enabled):                                             │
+│  # Option A: One-step (TTS + generate)                                   │
+│  $ vg talking-head create --text "Welcome..." -o th_intro.mp4            │
+│  # Returns: {"duration_s": 4.2}                                          │
+│                                                                          │
+│  # Option B: Two-step (from existing audio)                              │
 │  $ vg talking-head generate --audio intro.mp3 -o th_intro.mp4            │
+│                                                                          │
+│  # Overlay at AI-calculated time                                         │
 │  $ vg talking-head overlay --video final.mp4 \                           │
 │      --overlay th_intro.mp4:10.7 --position bottom-right -o with_th.mp4  │
 │                                                                          │
@@ -643,7 +650,7 @@ The Video Generator supports two browser automation drivers for recording:
 | **Editing** | Trim, cut, speed, concat | `vg_edit.py` |
 | **Composition** | Audio placement, overlay | `vg_compose.py` |
 | **Captions** | SRT generation, burn-in | `vg_captions.py` |
-| **Talking Heads** | AI presenter generation | `vg_talking_head.py` |
+| **Talking Heads** | AI presenter generation (create, generate, overlay) | `vg_talking_head.py`, `vg_commands/talking_head.py` |
 
 ---
 
@@ -714,6 +721,13 @@ vg audio tts --text "Welcome..." -o intro.mp3        # Returns duration
 vg edit trim --video v.mp4 --start 8 -o trimmed.mp4  # Returns adjustment
 vg edit speed-gaps --video v.mp4 --factor 3 -o fast.mp4  # Returns time_map
 vg compose place --video fast.mp4 --audio intro.mp3:10.2 -o final.mp4
+```
+
+### Talking Heads
+```bash
+vg talking-head create --text "Hi!" -o th.mp4        # TTS + generate, returns duration
+vg talking-head generate --audio a.mp3 -o th.mp4     # From existing audio
+vg talking-head overlay --video v.mp4 --overlay th.mp4:10.2 -o final.mp4
 ```
 
 ---

@@ -533,21 +533,23 @@ def cmd_agent_session_start(args) -> dict:
     
     # Create and configure session
     session = get_agent_session(args.run_id, paths.run_dir)
-    
-    # Open browser
     headed = getattr(args, 'headed', False)
-    result = session.open(url, headed=headed)
     
+    # Open URL first (may redirect to login if auth required)
+    result = session.open(url, headed=headed)
     if not result.get("success"):
         return result
     
-    # Set cookies if any
+    # Set cookies if any (uses JS to set with correct domain/path)
     if cookies:
         cookie_result = session.set_cookies(cookies)
         if not cookie_result.get("success"):
             return cookie_result
-        # Reload page after setting cookies
-        session._run_cmd("reload")
+        
+        # Navigate to actual URL (now with auth cookie)
+        nav_result = session._run_cmd("open", url, json_output=True)
+        if not nav_result.get("success"):
+            return nav_result
     
     # Start recording
     record_result = session.record_start()

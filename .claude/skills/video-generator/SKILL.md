@@ -78,7 +78,7 @@ vg record session stop --run-id demo
 ```
 
 **Tips:**
-- **AI agents:** Errors like "Data Query Error" are normal—agents retry. Just keep waiting (60-180s).
+- **AI agents:** "Data Query Error" or similar errors in chat = IGNORE. Don't stop, don't react. Agents auto-retry. Just keep waiting and snapshot periodically until done.
 - **Dropdowns:** Text snapshots miss dropdown contents. Use keyboard: `press ArrowDown` → `press Enter`
 - **Long operations:** Add `--response-timeout 120` to snapshot commands
 
@@ -112,6 +112,8 @@ vg record session agent-stop --run-id demo
 ```
 
 **vs Workflow B:** Uses `agent-start/do/stop` + refs (`@e5`) instead of `start/do/stop` + CSS selectors.
+
+**AI agent errors:** IGNORE "Data Query Error" in chat. Don't wait, don't react—just continue snapshotting until result appears.
 
 **After recording:** Same pipeline — convert, TTS, edit, compose.
 
@@ -182,19 +184,89 @@ WRONG: Record → Trim → Compose → Speed-silence (audio out of sync)
 
 User asks → You figure out timing and placement.
 
-**Overlay (picture-in-picture):**
+### Workflow A: Overlay TH (during video)
+
+TH appears as picture-in-picture while narration plays.
+
 ```bash
-vg talking-head generate --audio intro.mp3 -o th.mp4
-vg talking-head overlay --video v.mp4 --overlay th.mp4:33.6 --position bottom-right -o final.mp4
+# Option 1: From existing audio
+vg talking-head generate --audio audio/intro.mp3 -o th_intro.mp4
+# → Returns: {"duration": 4.2}
+
+# Option 2: Create from text (TTS + generate in one step)
+vg talking-head create --text "Hi! I'm your guide." -o th_intro.mp4
+# → Returns: {"video": "th_intro.mp4", "audio": "th_intro.mp3", "duration_s": 2.1}
+
+# Overlay at calculated time (you read timeline, add offset)
+vg talking-head overlay --video final.mp4 --overlay th_intro.mp4:33.6 -o final_th.mp4
 ```
 
-**Full-screen segment (split + insert + join):**
+**CRITICAL:** The overlay command uses `-itsoffset` internally to sync TH frame 0 with the overlay start time.
+
+### Workflow B: Fullscreen Intro TH
+
+TH appears fullscreen before main video starts.
+
 ```bash
-vg edit trim --video v.mp4 --end 45 -o before.mp4
-vg edit trim --video v.mp4 --start 45 -o after.mp4
-vg edit concat --videos "before.mp4,th.mp4,after.mp4" -o final.mp4
-# → Recalculate subsequent placements: add th.mp4 duration as offset
+# 1. Create TH
+vg talking-head create --text "Welcome! Let me show you something amazing." -o th_intro.mp4
+# → duration_s: 3.2
+
+# 2. Concat: TH first, then main video
+vg edit concat --videos "th_intro.mp4,main.mp4" -o final.mp4
+
+# 3. Recalculate all subsequent times
+# All marker times += 3.2s (TH duration)
+# t_page_loaded: 25.11 → 28.31
 ```
+
+### Workflow C: Fullscreen Outro TH
+
+TH appears at the end.
+
+```bash
+# 1. Create TH
+vg talking-head create --text "Thanks for watching!" -o th_outro.mp4
+
+# 2. Concat: main video first, then TH
+vg edit concat --videos "main.mp4,th_outro.mp4" -o final.mp4
+
+# No time recalculation needed (TH is at end)
+```
+
+### Workflow D: Insert TH Between Segments
+
+Insert a TH segment in the middle of the video.
+
+```bash
+# 1. Determine insert point (e.g., after intro ends at t=15s)
+# 2. Split video
+vg edit trim --video main.mp4 --end 15 -o before.mp4
+vg edit trim --video main.mp4 --start 15 -o after.mp4
+
+# 3. Create TH
+vg talking-head create --text "Now let me show you more." -o th_middle.mp4
+# → duration_s: 4.0
+
+# 4. Concat
+vg edit concat --videos "before.mp4,th_middle.mp4,after.mp4" -o final.mp4
+
+# 5. Recalculate: times > 15s get += 4.0s
+```
+
+**CRITICAL:** You always recalculate times after concat. Tools don't do this automatically.
+
+### Request File TH Section
+
+Users can specify TH-specific text in `## Talking Heads`:
+
+```markdown
+## Talking Heads
+1. **th_intro** (at: 0): "Hi! I'm your guide."
+2. **th_processing** (at: t_processing1_started + 5s): "Working..."
+```
+
+Timing hints: `0` (intro), `end` (outro), `t_marker`, `t_marker + 5s`
 
 Positions: `bottom-right`, `bottom-left`, `top-right`, `top-left`
 
@@ -218,10 +290,11 @@ Positions: `bottom-right`, `bottom-left`, `top-right`, `top-left`
 | Simple sync | `vg compose sync --video v.mp4 --audio a.mp3 -o final.mp4` |
 | Place at times | `vg compose place --video v.mp4 --audio a.mp3:10.5 -o final.mp4` (auto-fixes overlaps) |
 | **Captions** | |
-| Streaming | `vg captions streaming --video v.mp4 --request r.md -o final.mp4` |
+| Streaming | `vg captions streaming --video v.mp4 --request r.md --timeline t.md --audio-dir audio/ -o final.mp4` |
 | Burn SRT | `vg captions burn --video v.mp4 --captions c.srt -o final.mp4` |
 | **Talking Head** | |
-| Generate | `vg talking-head generate --audio a.mp3 -o presenter.mp4` |
+| Create from text | `vg talking-head create --text "Hi!" -o th.mp4` (TTS + generate) |
+| Generate from audio | `vg talking-head generate --audio a.mp3 -o presenter.mp4` |
 | Overlay at time | `vg talking-head overlay --video v.mp4 --overlay th.mp4:10.5 -o final.mp4` |
 | **Utils** | |
 | Video info | `vg info --file video.mp4` |
@@ -299,8 +372,9 @@ export FAL_API_KEY=...         # Optional, talking heads
 | webm not playing | Convert to mp4 first |
 | speed-gaps "placements required" | Use `--request + --timeline + --audio-dir` (never create JSON manually) |
 | Dropdown not visible | Use keyboard: `press ArrowDown` → `press Enter` |
-| AI agent shows error | Normal. Agents retry automatically. Keep waiting. |
+| AI agent shows error | IGNORE IT. "Data Query Error" etc. = normal. Don't stop. Keep snapshotting until result appears. |
 | Click blocked | Press Escape first |
+| TH freezes/wrong frame | Fixed in code. Uses `-itsoffset` to delay TH input stream. |
 
 ---
 

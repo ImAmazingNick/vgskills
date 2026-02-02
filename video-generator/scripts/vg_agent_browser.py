@@ -189,24 +189,40 @@ class AgentBrowserSession:
             
         return result
     
-    def set_cookie(self, name: str, value: str, domain: str) -> Dict[str, Any]:
+    def set_cookie(self, name: str, value: str, domain: str = None, 
+                   path: str = "/", url: str = None) -> Dict[str, Any]:
         """Set authentication cookie.
         
         Args:
             name: Cookie name
             value: Cookie value
-            domain: Cookie domain (e.g., ".example.com")
+            domain: Cookie domain (e.g., ".improvado.io")
+            path: Cookie path (default: "/")
+            url: Not used (kept for API compatibility)
             
         Returns:
             Result dict
+        
+        Note: Uses JavaScript document.cookie because agent-browser's 
+        --domain/--path/--url flags are broken (ignored).
         """
-        return self._run_cmd("set-cookie", f"{name}={value}", f"--domain={domain}")
+        # Build cookie string for JavaScript
+        cookie_parts = [f"{name}={value}", f"path={path}"]
+        if domain:
+            cookie_parts.append(f"domain={domain}")
+        cookie_parts.append("secure")
+        cookie_str = "; ".join(cookie_parts)
+        
+        # Use JavaScript to set cookie (agent-browser flags are broken)
+        js_code = f'document.cookie = "{cookie_str}"'
+        return self._run_cmd("eval", js_code, json_output=True)
     
-    def set_cookies(self, cookies: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def set_cookies(self, cookies: List[Dict[str, Any]], target_url: str = None) -> Dict[str, Any]:
         """Set multiple cookies from list.
         
         Args:
-            cookies: List of cookie dicts with name, value, domain keys
+            cookies: List of cookie dicts with name, value, domain, path keys
+            target_url: Target URL for all cookies (preferred method)
             
         Returns:
             Result dict (last cookie result)
@@ -216,8 +232,10 @@ class AgentBrowserSession:
             name = cookie.get("name", "")
             value = cookie.get("value", "")
             domain = cookie.get("domain", "")
+            path = cookie.get("path", "/")
+            url = cookie.get("url") or target_url
             if name and value:
-                result = self.set_cookie(name, value, domain)
+                result = self.set_cookie(name, value, domain, path, url)
                 if not result.get("success"):
                     return result
         return result

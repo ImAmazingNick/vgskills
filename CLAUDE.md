@@ -17,10 +17,12 @@ python3 video-generator/scripts/vg request generate --file demo.md --skip-record
 | Task | Command |
 |------|---------|
 | Place audio at times | `vg compose place --video v.mp4 --audio a.mp3:33.6 --audio b.mp3:107.3 -o out.mp4` |
+| Create talking head | `vg talking-head create --text "Hi!" -o th.mp4` (TTS + generate) |
 | Overlay talking heads | `vg talking-head overlay --video v.mp4 --overlay th.mp4:47.6 --position bottom-right -o out.mp4` |
 
 **Returns from tools (AI uses to recalculate):**
 - `vg audio tts` → `{"duration_s": 4.2, "path": "..."}`
+- `vg talking-head create` → `{"video": "th.mp4", "audio": "th.mp3", "duration_s": 2.1}`
 - `vg edit trim` → `{"adjustment": {"type": "offset", "seconds": -8}}`
 - `vg edit speed-gaps` → `{"time_map": [[33.6, 12.8], ...], "scale_factor": 0.38}`
 
@@ -31,11 +33,13 @@ python3 video-generator/scripts/vg request generate --file demo.md --skip-record
 | Full pipeline | `vg request generate --file demo.md` |
 | Record (CSS selectors) | `vg record session start/do/stop --run-id demo` |
 | Record (ref-based) | `vg record session agent-start/do/stop --run-id demo` |
+
+**Recording AI agents:** "Data Query Error" in chat = IGNORE. Don't stop. Keep snapshotting until done.
 | Generate TTS | `vg audio tts --text "..." -o audio.mp3` |
 | Add audio to video | `vg compose sync --video v.mp4 --audio a.mp3 -o final.mp4` |
 | Trim video | `vg edit trim --video v.mp4 --start 5 --end 60 -o out.mp4` |
 | Speed up gaps | `vg edit speed-gaps --video v.mp4 --factor 3 -o out.mp4` |
-| Generate captions | `vg captions streaming --video v.mp4 --request r.md -o final.mp4` |
+| Generate captions | `vg captions streaming --video v.mp4 --request r.md --timeline t.md --audio-dir audio/ -o final.mp4` |
 
 All `vg` commands: `python3 video-generator/scripts/vg <command>`
 

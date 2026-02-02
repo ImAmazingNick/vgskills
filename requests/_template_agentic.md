@@ -61,6 +61,24 @@ Describe what to say and when. AI figures out the exact timing.
 
 ---
 
+## Talking Heads (Optional)
+
+Add talking head overlays with custom narration. Remove this section if not using talking heads.
+
+1. **th_intro** (at: 0): "Hi! I'm your AI guide. Let me show you something amazing."
+
+2. **th_processing** (at: t_processing1_started + 5s): "The AI is analyzing your data..."
+
+3. **th_outro** (at: end): "That's all it takes! Give it a try yourself."
+
+**Timing hints:**
+- `at: 0` — Fullscreen intro (prepended to video)
+- `at: t_marker_name` — Overlay at marker time
+- `at: t_marker + 5s` — Overlay 5 seconds after marker
+- `at: end` — Fullscreen outro (appended to video)
+
+---
+
 ## Notes
 
 [Any special instructions for the AI agent]

@@ -174,9 +174,23 @@ Use this section to add narration only when processing takes longer than expecte
 ### Talking Head
 - **Enable:** [yes | no]
 - **Model:** [OmniHuman | SadTalker]
-- **Segments:** [Which narrative segments should show talking head]
-- **Size:** [300px | custom]
+- **Segments:** [Which narrative segments should show talking head, or "all"]
+- **Size:** [280px | custom]
 - **Position:** [bottom-right | bottom-left | top-right | top-left]
+
+#### Custom TH Segments (Optional)
+
+Use this table for talking heads with custom text (different from voiceover).
+
+<!-- TALKING_HEADS_START -->
+| ID | Timing Hint | Text |
+|----|-------------|------|
+| th_intro | 0 | Hi! I'm your AI guide. |
+| th_processing | t_processing1_started + 5s | The AI is working on your request... |
+| th_outro | end | That's all! Try it yourself. |
+<!-- TALKING_HEADS_END -->
+
+**Timing hints:** `0` (intro), `end` (outro), `t_marker_name`, `t_marker + Ns`
 
 ### Editing
 - **Trim Start:** [seconds to remove from beginning]

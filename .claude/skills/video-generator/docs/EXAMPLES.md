@@ -256,17 +256,19 @@ User says: *"Add a talking head in the bottom right during the intro"*
 
 AI does:
 ```bash
-# 1. Generate TTS (get duration)
+# Option A: One-step convenience (recommended)
+vg talking-head create --text "Welcome to Improvado..." -o th_intro.mp4
+# Returns: {"video": "th_intro.mp4", "audio": "th_intro.mp3", "duration_s": 4.2}
+
+# Option B: Two-step (more control)
 vg audio tts --text "Welcome to Improvado..." -o intro.mp3
 # Returns: duration: 4.2s
-
-# 2. Generate talking head (lip-synced to audio)
 vg talking-head generate --audio intro.mp3 -o th_intro.mp4
 
-# 3. Get marker time from timeline.md (e.g., t_page_loaded: 33.6s)
-# 4. Apply any time adjustments from trim/speed-gaps
+# Get marker time from timeline.md (e.g., t_page_loaded: 33.6s)
+# Apply any time adjustments from trim/speed-gaps
 
-# 5. Overlay at calculated time
+# Overlay at calculated time
 vg talking-head overlay --video final.mp4 --overlay th_intro.mp4:25.1 --position bottom-right -o with_th.mp4
 ```
 
@@ -297,10 +299,9 @@ User says: *"Insert a presenter segment between the typing and results"*
 
 AI does:
 ```bash
-# 1. Generate TTS + talking head
-vg audio tts --text "Now let's see the results..." -o transition.mp3
-# Returns: duration: 3.5s
-vg talking-head generate --audio transition.mp3 -o th_transition.mp4
+# 1. Create talking head from text (TTS + generate in one step)
+vg talking-head create --text "Now let's see the results..." -o th_transition.mp4
+# Returns: {"video": "th_transition.mp4", "duration_s": 3.5}
 
 # 2. Find the split point from timeline (e.g., t_agent_done: 98.5s)
 
@@ -325,21 +326,17 @@ vg edit concat --videos "before.mp4,th_transition.mp4,after.mp4" -o final.mp4
 # Timeline: t_page_loaded: 8.2s, t_agent_done: 85.3s
 # After trim -8s and speed-gaps: t_page_loaded: 0.2s, t_agent_done: 42.1s
 
-# === GENERATE TTS ===
-vg audio tts --text "Welcome to our AI platform. Watch how easy it is." -o intro.mp3
-# duration: 4.8s
+# === CREATE TALKING HEADS (TTS + generate in one step) ===
+vg talking-head create --text "Welcome to our AI platform. Watch how easy it is." -o th_intro.mp4
+# Returns: {"duration_s": 4.8}
 
-vg audio tts --text "And here's your dashboard, ready to use." -o reveal.mp3
-# duration: 3.2s
-
-# === GENERATE TALKING HEADS ===
-vg talking-head generate --audio intro.mp3 -o th_intro.mp4
-vg talking-head generate --audio reveal.mp3 -o th_reveal.mp4
+vg talking-head create --text "And here's your dashboard, ready to use." -o th_reveal.mp4
+# Returns: {"duration_s": 3.2}
 
 # === COMPOSE AUDIO ===
 vg compose place --video fast.mp4 \
-  --audio intro.mp3:0.2 \
-  --audio reveal.mp3:42.1 \
+  --audio th_intro.mp3:0.2 \
+  --audio th_reveal.mp3:42.1 \
   -o with_audio.mp4
 
 # === ADD TALKING HEAD OVERLAYS ===
@@ -349,6 +346,26 @@ vg talking-head overlay --video with_audio.mp4 \
   --position bottom-right \
   -o final.mp4
 ```
+
+---
+
+### Request File: `## Talking Heads` Section
+
+For requests with custom TH text (separate from voiceover), use the `## Talking Heads` section:
+
+```markdown
+## Talking Heads (Optional)
+
+1. **th_intro** (at: 0): "Hi! I'm your AI guide."
+2. **th_processing** (at: t_processing1_started + 5s): "The AI is analyzing..."
+3. **th_outro** (at: end): "That's all! Try it yourself."
+```
+
+AI interprets timing hints:
+- `at: 0` → Fullscreen intro (prepend to video)
+- `at: t_marker` → Overlay at marker time
+- `at: t_marker + 5s` → Overlay 5s after marker
+- `at: end` → Fullscreen outro (append to video)
 
 ---
 

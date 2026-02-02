@@ -199,6 +199,71 @@ def parse_agentic_narration_from_md(md_content: str) -> List[Dict[str, Any]]:
     return segments
 
 
+def parse_talking_heads_from_md(md_content: str) -> List[Dict[str, Any]]:
+    """
+    Parse talking head segments from markdown.
+    
+    FORMAT:
+    ## Talking Heads
+    
+    1. **th_intro** (at: 0): "Hi! I'm your guide."
+    2. **th_processing** (at: t_processing1_started + 5s): "Working on it..."
+    3. **th_outro** (at: end): "That's it! Try it yourself."
+    
+    Also accepts: ## Talking Heads (Optional)
+    
+    Returns list of TH segments with: id, text, timing_hint, position
+    AI interprets timing_hint to calculate actual times.
+    """
+    # Find ## Talking Heads section (with optional suffix like "(Optional)")
+    pattern = r'## Talking Heads[^\n]*\n(.*?)(?=\n## |\Z)'
+    match = re.search(pattern, md_content, re.DOTALL | re.IGNORECASE)
+    if not match:
+        return []
+    
+    section = match.group(1).strip()
+    segments = []
+    
+    # Pattern: 1. **id** (at: timing): "text"
+    # The (at: ...) part is optional
+    inline_pattern = r'^\d+\.\s*\*\*(\w+)\*\*\s*(?:\(at:\s*([^)]+)\))?\s*:\s*(.+)$'
+    
+    for line in section.split('\n'):
+        line = line.strip()
+        if not line or line.startswith('#') or line.startswith('**Timing'):
+            continue
+        
+        match = re.match(inline_pattern, line)
+        if match:
+            seg_id = match.group(1).strip()
+            timing_hint = match.group(2).strip() if match.group(2) else None
+            text = match.group(3).strip()
+            
+            # Remove surrounding quotes
+            if (text.startswith('"') and text.endswith('"')) or \
+               (text.startswith("'") and text.endswith("'")):
+                text = text[1:-1]
+            
+            # Determine type based on timing hint
+            th_type = "overlay"  # Default
+            if timing_hint:
+                timing_lower = timing_hint.lower()
+                if timing_lower == "0" or timing_lower == "start":
+                    th_type = "intro"  # Fullscreen at start
+                elif timing_lower == "end":
+                    th_type = "outro"  # Fullscreen at end
+            
+            segments.append({
+                "id": seg_id,
+                "text": text,
+                "timing_hint": timing_hint,  # AI interprets: "0", "end", "t_marker + 5s"
+                "type": th_type,
+                "position": "bottom-right",  # Default for overlays
+            })
+    
+    return segments
+
+
 def parse_simple_options_from_md(md_content: str) -> Dict[str, Any]:
     """
     Parse simplified options format from markdown.
@@ -902,6 +967,9 @@ def parse_request_file(request_path: Path) -> Dict[str, Any]:
     scenario_flow_text = extract_scenario_flow_text(content)
     voiceover_prompts = extract_prompts_from_segments(voiceover_segments)
     
+    # Parse talking heads section (separate from voiceover)
+    talking_heads = parse_talking_heads_from_md(content)
+    
     # Parse options - try old format first, then merge with simplified format
     options = parse_options_from_md(content)
     simple_options = parse_simple_options_from_md(content)
@@ -960,6 +1028,10 @@ def parse_request_file(request_path: Path) -> Dict[str, Any]:
         "segment_count": len(voiceover_segments),
         "has_voiceover": len(voiceover_segments) > 0,
         "narration_format": narration_format,  # "legacy" or "agentic"
+        
+        # Talking heads (separate from voiceover)
+        "talking_heads": talking_heads,
+        "has_talking_heads": len(talking_heads) > 0,
         
         # Recording
         "actions": actions,

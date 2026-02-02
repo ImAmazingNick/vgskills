@@ -38,6 +38,15 @@ def register(subparsers):
     overlay_parser.add_argument('--size', type=int, default=280, help='Overlay size in pixels')
     overlay_parser.set_defaults(func=cmd_overlay)
 
+    # vg talking-head create - CONVENIENCE: TTS + generate in one step
+    create_parser = th_sub.add_parser('create', help='Create talking head from text (TTS + generate)')
+    create_parser.add_argument('--text', required=True, help='Text to speak')
+    create_parser.add_argument('--output', '-o', required=True, help='Output video path')
+    create_parser.add_argument('--character', help='Character image path (auto-generated if not provided)')
+    create_parser.add_argument('--model', default='omnihuman', choices=['omnihuman', 'sadtalker'], help='Model to use')
+    create_parser.add_argument('--voice-id', default='21m00Tcm4TlvDq8ikWAM', help='ElevenLabs voice ID')
+    create_parser.set_defaults(func=cmd_create)
+
     # vg talking-head composite - Legacy single-overlay (backward compatible)
     comp_parser = th_sub.add_parser('composite', help='Composite talking head onto video')
     comp_parser.add_argument('--video', required=True, help='Main video file path')
@@ -63,6 +72,82 @@ def cmd_generate(args) -> dict:
         character_image=args.character,
         model=args.model
     )
+
+
+def cmd_create(args) -> dict:
+    """
+    Create talking head from text in one step (TTS + generate).
+    
+    DUMB WRAPPER: Just combines TTS + generate. No intelligence.
+    AI decides when to use this and where to place the result.
+    
+    Usage:
+        vg talking-head create --text "Hi! Welcome." -o th_intro.mp4
+    
+    Returns:
+        {"video": "th_intro.mp4", "audio": "th_intro.mp3", "duration_s": 2.1}
+    """
+    from vg_tts import tts_with_json_output
+    
+    # Validate environment (need both ElevenLabs and FAL)
+    env_check = validate_env_for_command("talking-head.create")
+    if not env_check["success"]:
+        return env_check
+    
+    output_path = Path(args.output)
+    audio_path = output_path.with_suffix('.mp3')
+    
+    # Ensure output directory exists
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    # Step 1: Generate TTS
+    text_preview = args.text[:50] + "..." if len(args.text) > 50 else args.text
+    print(f"🎤 Generating TTS: \"{text_preview}\"")
+    
+    tts_result = tts_with_json_output(
+        text=args.text,
+        output_path=str(audio_path),
+        voice_id=args.voice_id
+    )
+    
+    if not tts_result.get("success"):
+        return {
+            "success": False,
+            "error": f"TTS failed: {tts_result.get('error')}",
+            "code": tts_result.get("code", "TTS_ERROR")
+        }
+    
+    duration_s = tts_result.get("duration_s") or tts_result.get("duration") or 0
+    print(f"   ✅ Audio: {audio_path.name} ({duration_s:.1f}s)")
+    
+    # Step 2: Generate talking head
+    print(f"🎬 Generating talking head with {args.model}...")
+    
+    th_result = generate_talking_head(
+        audio_path=str(audio_path),
+        output_path=str(output_path),
+        character_image=args.character,
+        model=args.model
+    )
+    
+    if not th_result.get("success"):
+        return {
+            "success": False,
+            "error": f"TH generation failed: {th_result.get('error')}",
+            "code": th_result.get("code", "TH_ERROR")
+        }
+    
+    print(f"   ✅ Video: {output_path.name}")
+    
+    return {
+        "success": True,
+        "video": str(output_path),
+        "audio": str(audio_path),
+        "duration_s": duration_s,
+        "model": args.model,
+        "cached": th_result.get("cached", False)
+    }
+
 
 def cmd_composite(args) -> dict:
     """Handle vg talking-head composite command."""
@@ -164,6 +249,36 @@ def cmd_overlay(args) -> dict:
         # Sort overlays by start time
         overlays.sort(key=lambda x: x["start_s"])
         
+        # Validate overlay times against video duration
+        video_duration = get_duration(video_path)
+        warnings = []
+        
+        for o in overlays:
+            if o["start_s"] > video_duration:
+                return {
+                    "success": False,
+                    "error": f"Overlay start time ({o['start_s']:.1f}s) exceeds video duration ({video_duration:.1f}s)",
+                    "code": "VALIDATION_ERROR",
+                    "suggestion": f"Use a start time less than {video_duration:.1f}s"
+                }
+            
+            if o["start_s"] < 0:
+                return {
+                    "success": False,
+                    "error": f"Overlay start time cannot be negative ({o['start_s']:.1f}s)",
+                    "code": "VALIDATION_ERROR"
+                }
+            
+            if o["end_s"] > video_duration:
+                warnings.append(
+                    f"TH '{Path(o['file']).name}' extends past video end "
+                    f"({o['end_s']:.1f}s > {video_duration:.1f}s) - will be clipped"
+                )
+        
+        if warnings:
+            for w in warnings:
+                print(f"⚠️  {w}")
+        
         # Ensure output directory exists
         output_path.parent.mkdir(parents=True, exist_ok=True)
         
@@ -196,6 +311,7 @@ def cmd_overlay(args) -> dict:
             cmd = [
                 ffmpeg, "-y",
                 "-i", str(video_path),
+                "-itsoffset", str(o['start_s']),  # CRITICAL: Delay TH input to sync with overlay time
                 "-i", o["file"],
                 "-filter_complex", filter_complex,
                 "-map", "[vout]",
@@ -208,9 +324,10 @@ def cmd_overlay(args) -> dict:
         else:
             # Multiple overlays - chain them
             # Build complex filter that applies overlays sequentially
+            # CRITICAL: Each TH input needs -itsoffset to sync frame 0 with overlay start time
             inputs = ["-i", str(video_path)]
             for o in overlays:
-                inputs.extend(["-i", o["file"]])
+                inputs.extend(["-itsoffset", str(o['start_s']), "-i", o["file"]])
             
             # Scale all overlays
             filter_parts = []
