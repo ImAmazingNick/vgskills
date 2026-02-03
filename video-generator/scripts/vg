@@ -45,7 +45,7 @@ def load_env_file():
 load_env_file()
 
 # Import command handlers
-from vg_commands import record, audio, edit, compose, talking_head, quality, utils, request, narration, captions
+from vg_commands import record, audio, edit, compose, talking_head, quality, utils, request, narration, captions, run
 
 def main():
     parser = argparse.ArgumentParser(
@@ -68,6 +68,7 @@ def main():
     utils.register(subparsers)
     request.register(subparsers)
     narration.register(subparsers)
+    run.register(subparsers)
 
     args = parser.parse_args()
 
@@ -126,7 +127,12 @@ def output_text(data: dict):
     if not isinstance(data, dict):
         print(str(data))
         return
-    
+
+    # Check for formatted text output (like evaluation reports)
+    if data.get("_is_text_output") and data.get("_formatted_output"):
+        print(data["_formatted_output"])
+        return
+
     # Status line
     if data.get("success") == False:
         print(f"ERROR: {data.get('error', 'Unknown error')}")
@@ -135,7 +141,7 @@ def output_text(data: dict):
         if data.get("suggestion"):
             print(f"suggestion: {data['suggestion']}")
         return
-    
+
     print("OK")
     
     # Output each field in readable format

@@ -33,6 +33,64 @@ FULL CONTROL OVER TIMING?
 
 ---
 
+## Evaluation: Automatic Quality Assurance
+
+**EVALUATION IS AUTOMATIC** - runs after every `vg request generate` command.
+
+```bash
+# Generate + evaluate automatically
+vg request generate --file demo.md
+# Returns: {success: true, run_id: "...", evaluation: {...}}
+```
+
+### For AI Agents: Check Evaluation Results
+
+After generation, check the returned `evaluation` object:
+
+```javascript
+// Example response from vg request generate
+{
+  success: true,
+  run_id: "demo_20250202_143022",
+  final_video: "videos/runs/demo_20250202_143022/final.mp4",
+  evaluation: {
+    status: "success", // "success" | "partial_success" | "failure"
+    quality_score: 0.94, // 0.0 to 1.0
+    issues_count: 0,
+    recommendations_count: 2,
+    report_path: "videos/runs/demo_20250202_143022/evaluation/evaluation.md"
+  }
+}
+```
+
+### Quality Thresholds
+- **✅ SUCCESS**: `status == "success"` - perfect run
+- **⚠️ PARTIAL**: `status == "partial_success"` - mostly good, check issues
+- **❌ FAILURE**: `status == "failure"` - major problems, investigate
+
+### Quick Fixes for Common Issues
+- `issues_count > 0` → Read `evaluation.md` for specific problems
+- `quality_score < 0.8` → Check recording setup, add narration
+- Missing timeline markers → Add anchors to narration sections
+
+### Manual Deep Evaluation (if needed)
+```bash
+vg run evaluate --run-id demo_20250202_143022
+# Shows detailed human-readable report
+```
+
+### Dashboard & Analytics
+```bash
+vg run dashboard                    # Generate simple HTML table of all runs
+vg run list --limit 10              # List recent runs in terminal
+vg run summary --days 7             # 7-day quality summary
+# All evaluations stored in: evaluations.md
+```
+
+**PRINCIPLE**: Evaluation happens automatically. Check results, apply recommendations, iterate easily.
+
+---
+
 ## Workflow A: Automated (simple cases)
 
 ```bash

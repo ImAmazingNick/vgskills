@@ -709,6 +709,32 @@ def cmd_generate(args) -> dict:
         except Exception:
             pass
 
+        # Automatic evaluation for AI agents (gentic workflow)
+        try:
+            from vg_commands.run import RunEvaluator
+            evaluator = RunEvaluator(run_id)
+            eval_result = evaluator.evaluate_run(detailed=False)
+
+            # Add evaluation summary to results for AI agents
+            if eval_result.get("success"):
+                results["evaluation"] = {
+                    "status": eval_result["evaluation"]["status"],
+                    "quality_score": eval_result["evaluation"]["metrics"]["quality_score"],
+                    "issues_count": len(eval_result["evaluation"]["issues"]),
+                    "recommendations_count": len(eval_result["evaluation"]["recommendations"]),
+                    "report_path": f"videos/runs/{run_id}/evaluation/evaluation.md"
+                }
+
+                # Update final video path in results if evaluation found it
+                if not results.get("final_video"):
+                    final_video = rp.run_dir / "final.mp4"
+                    if final_video.exists():
+                        results["final_video"] = str(final_video)
+
+        except Exception as eval_error:
+            # Don't fail the whole generation if evaluation fails
+            results["evaluation_error"] = str(eval_error)
+
         return results
     
     except Exception as e:

@@ -59,11 +59,12 @@ The Video Generator is an AI-orchestrated system that creates professional produ
 │                              VG CLI (Python)                                 │
 │                                                                             │
 │   vg record     vg audio      vg edit       vg compose     vg captions     │
-│   vg talking-head            vg quality     vg request                      │
+│   vg talking-head            vg quality     vg request     vg run           │
 │                                                                             │
 │  ┌───────────────────────────────────────────────────────────────────────┐ │
 │  │                        Core Modules                                    │ │
 │  │  vg_recording.py  vg_tts.py  vg_edit.py  vg_compose.py  vg_captions.py│ │
+│  │  vg_run.py  (evaluation system)                                        │ │
 │  └───────────────────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────────────────┘
                                     │
@@ -598,6 +599,114 @@ videos/runs/<run_id>/
 └── run_report.md              # Metadata, issues, screenshots
 ```
 
+### Evaluation Output
+
+```
+evaluations.md                    # Central evaluation file for all runs
+runs_dashboard.html              # HTML dashboard table (optional)
+```
+
+---
+
+## Runs Evaluation System
+
+The Runs Evaluation System provides comprehensive quality assurance and performance monitoring for every video generation run. It automatically evaluates runs for issues using advanced technical metrics, generates actionable recommendations, and tracks trends over time.
+
+### Architecture Integration
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           EVALUATION SYSTEM                                  │
+│                                                                             │
+│  Automatic Evaluation → Technical Analysis → Quality Scoring → Reports     │
+│                                                                             │
+│  📊 Quality metrics for video, audio, sync, performance                     │
+│  📋 Markdown reports in evaluations.md                                     │
+│  🎯 Actionable recommendations for improvement                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Core Features
+
+| Feature | Description | Commands |
+|---------|-------------|----------|
+| **Smart Evaluation** | Technical analysis with quality scoring and recommendations | `vg run evaluate --run-id <id>` |
+| **Automatic Reports** | Markdown reports in evaluations.md with all run details | Automatic after generation |
+| **Dashboard View** | Clean HTML table of all runs with status indicators | `vg run dashboard` |
+| **Trend Tracking** | Success rates and quality metrics across runs | `vg run list` / `vg run summary` |
+
+### Smart Evaluation Features
+
+**Technical Analysis:** Video codec/resolution/bitrate, audio quality/sync, compression efficiency
+**Quality Scoring:** 0.0-1.0 algorithm-based metrics for each phase
+**Issue Detection:** Automatic identification of technical problems and missing elements
+**Recommendations:** Actionable suggestions based on detected issues
+
+### Output: evaluations.md
+
+Central markdown file with all run evaluations, technical details, and improvement suggestions.
+
+
+### Integration with Workflow
+
+**AUTOMATIC EVALUATION**: Runs immediately after every `vg request generate` command.
+
+```
+AI Agent Workflow:
+1. Create/Update Request File
+                   ↓
+2. Run: vg request generate --file demo.md
+                   ↓
+3. Video Generation + Automatic Evaluation
+                   ↓
+4. Check Returned evaluation Object
+                   ↓
+5. Apply Recommendations if Needed
+                   ↓
+6. Iterate Easily (evaluation guides improvements)
+```
+
+### Central evaluations.md File
+
+All evaluations stored in single markdown file with summary and detailed technical reports.
+**Quality Score:** 0.94/1.0
+### Issues
+None
+### Recommendations
+- Consider speed-gaps for long sections
+```
+
+### CLI Commands
+
+#### Evaluate & Analyze
+```bash
+vg run evaluate --run-id demo           # Evaluate specific run
+vg run evaluate --last                  # Evaluate most recent run
+vg run list                             # List all runs
+vg run summary --days 7                 # 7-day statistics
+vg run dashboard                        # Generate HTML dashboard
+```
+
+### Quality Gates & Automation
+
+The evaluation system enables automated quality assurance:
+
+- **Pre-deployment Checks**: Verify runs meet quality thresholds
+- **Regression Detection**: Alert on declining success rates
+- **Performance Monitoring**: Track generation time trends
+- **Issue Pattern Recognition**: Identify common failure modes
+
+### Output Enhancement
+
+Evaluations are stored in the run directory:
+
+```
+evaluations.md                    # Central evaluation file for all runs
+videos/runs/<run_id>/             # Video output directories (no per-run eval files)
+├── final.mp4
+└── ... (existing files)
+```
+
 ---
 
 ## Component Reference
@@ -681,7 +790,7 @@ The Video Generator supports two browser automation drivers for recording:
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-All CLI commands return JSON with `success: true/false` and actionable error messages.
+All CLI commands provide clear success/error feedback with actionable error messages.
 
 ---
 
@@ -730,6 +839,15 @@ vg talking-head create --text "Hi!" -o th.mp4        # Square TH for PiP overlay
 vg talking-head intro --text "Welcome!" -o intro.mp4 # Fullscreen YouTuber-style
 vg talking-head title --text "Part 2" -o title.mp4   # AI title card (Grok Imagine)
 vg talking-head overlay --video v.mp4 --overlay th.mp4:10.2 -o final.mp4
+```
+
+### Run Evaluation & Analytics
+```bash
+vg run evaluate --run-id demo                    # Evaluate specific run
+vg run evaluate --last                           # Evaluate most recent run
+vg run list --limit 10                           # List recent evaluations
+vg run list --status failure --limit 5           # Show failed runs
+vg run summary --days 7                          # 7-day summary statistics
 ```
 
 ---
